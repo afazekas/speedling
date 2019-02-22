@@ -283,7 +283,6 @@ def nova_compose():
                                ('shared_secret', 'neutron_nova_metadata'),
                                ('mysql', 'nova'),
                                ('rabbit', 'openstack')])
-    placement = inv.hosts_with_service('nova-placement-api')
     util.bless_with_principal(novas, [('os', 'placement@default')])  # n-cpu using it
     mariadb.populate_peer(rh, ['client'])  # TODO: maybe not all node needs it
 

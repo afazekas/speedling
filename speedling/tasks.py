@@ -117,57 +117,6 @@ def local_os_service_start_by_component(*args):
                 to_start.append(comp['services'][s]['unit_name'][ds])
     localsh.run('systemctl start %s' % (' '.join(to_start)))
 
-# NOTE: gnocchi page recomended postgresql, but mariadb is fine as well.
-
-
-# NOTE: neutron got 2 phase db, upgrade support
-# you can do the compatible and incompatible ugrade steps separetly
-# WARNING: just partial gnocchi sync now
-
-# TODO: Add horizon db (session), placement db, barbican
-# su -s /bin/sh -c "barbican-db-manage --dburl mysql://barbican:BARBICAN_DBPASS@${PRIVATE_SERVICE_IP}/barbican upgrade" barbican
-# su -s /bin/sh -c "cloudkitty-dbsync upgrade ; cloudkitty-storage-init" cloudkitty
-# su -s /bin/sh -c "magnum-db-manage upgrade" magnum
-# su -s /bin/sh -c "mysql -u root<<<'SET GLOBAL foreign_key_checks=0;'; trove-manage db_sync; mysql -u root<<<'SET GLOBAL foreign_key_checks=1;'" trove
-
-# Since cells the 'nova_api' needs to come first than the cell mange commands, then the rest sync
-db_sync_commands = {
-    'glance': 'su -s /bin/sh -c "glance-manage db_sync && glance-manage db load_metadefs" glance',
-    'nova': 'su -s /bin/sh -c "nova-manage db sync" nova',
-    'nova_cell0': 'su -s /bin/sh -c "nova-manage cell_v2 map_cell0 && (nova-manage cell_v2 list_cells | grep \'^| .*cell1\' -q || nova-manage cell_v2 create_cell --name=cell1 --verbose)"',
-    'nova_api': 'su -s /bin/sh -c "nova-manage api_db sync" nova',
-    'neutron': 'su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron',
-    'cinder': 'su -s /bin/sh -c "cinder-manage db sync" cinder',
-    'heat': 'su -s /bin/sh -c "heat-manage db_sync" heat',
-    'gnocchi': 'su -s /bin/sh -c "gnocchi-upgrade --skip-storage" gnocchi',
-    'mistral': 'su -s /bin/sh -c "mistral-db-manage upgrade head && mistral-db-manage populate" mistral',
-    'manila': 'su -s /bin/sh -c "manila-manage db sync" manila',
-    'sahara': 'su -s /bin/sh -c "sahara-db-manage upgrade head" sahara',
-    'ironic': 'su -s /bin/sh -c "ironic-dbsync" ironic',
-    'designate': 'su -s /bin/sh -c "designate-manage database sync" designate',
-    'keystone': 'su -s /bin/sh -c "keystone-manage db_sync" keystone',
-    'aodh': 'su -s /bin/sh -c "aodh-dbsync" aodh',
-}
-
-
-# TODO: move this to the component side
-db_user = {
-    'glance': 'glance',
-    'nova': 'nova',
-    'nova_api': 'nova',
-    'nova_cell0': 'nova',
-    'neutron': 'neutron',
-    'cinder': 'cinder',
-    'heat': 'heat',
-    'gnocchi': 'gnocchi',
-    'mistral': 'mistral',
-    'manila': 'manila',
-    'sahara': 'sahara',
-    'ironic': 'ironic',
-    'designate': 'designate',
-    'keystone': 'keystone',
-    'aodh': 'aodh'}
-
 
 # TODO: select db part node, which may got the default scheme
 #       use the same node for all DB admin step (they know how to do admin login)
@@ -221,24 +170,13 @@ def do_synccmd(sync_cmd):
         LOG.debug(('Sync did not succuded after multiple attempt with: %s' % sync_cmd))
 
 
-# deprecated
-def db_sync(schema, pre_sync_script_dir=None):
-    user = db_user[schema]
-    passwd = util.get_keymgr()('mysql', user)
-    do_handle_schema(schema, db_user[schema], passwd,
-                     pre_sync_script_dir)
-    sync_cmd = db_sync_commands[schema]
-    do_synccmd(sync_cmd)
-
-
-def subtask_db_sync(speaker, schema, schema_user=None, schema_passwd=None,
-                    sync_cmd=None, pre_sync_script_dir=None):
+def subtask_db_sync(speaker, schema, sync_cmd=None,
+                    schema_user=None, schema_passwd=None,
+                    pre_sync_script_dir=None):
     if not schema_user:
-        schema_user = db_user[schema]
+        schema_user = schema
     if not schema_passwd:
         schema_passwd = util.get_keymgr()('mysql', schema_user)
-    if not sync_cmd:
-        sync_cmd = db_sync_commands[schema]
     # expected to give back the same node in single run
     db_speaker = set((next(iter(inv.hosts_with_service('mariadb'))),))
     inv.do_do(db_speaker, do_handle_schema, c_kwargs={'schema': schema,

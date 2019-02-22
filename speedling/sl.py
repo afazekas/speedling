@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
-# it is a python >3.5 like DSL, but long lines are allowed! ;-)
+# it is a python >3.6 like DSL, but long lines are allowed! ;-)
 
-# py2 not supported, this code is not intended to support both
-# py2 and py3
-
-# I just started to convert some shell script to py ..
 
 import os
-
-
-# do we really need the utils package, can it be in the root ?
-# TODO: abs import, shorter pkg name
 
 
 from osinsutils import cfgfile
@@ -39,14 +31,12 @@ import speedling.srv.tempest
 import speedling.srv.osclients
 import speedling.srv.ceph
 import speedling.srv.haproxy
-# import speedling.srv.heat
-# import speedling.srv.telemetry
 
 LOG = logging.getLogger(__name__)
 
 UNIT_PREFIX = 'sl-'
 
-# TODO: find a handler which prefixes every line, and not escaping the '\n' .
+# TODO: find a handler which prefixes every line and not escaping the '\n' .
 logging.basicConfig(level=logging.INFO,
                     format='%(thread)d %(created)f %(levelname)s %(name)s %(message)s')
 
@@ -56,19 +46,6 @@ LOG.info("Started ..")
 
 # This is dummy demo network address fetching code, just for all in one!
 # it must be more generic
-
-
-def rdo_repos():
-    """Repos for centos newton with epel fresh"""
-    # now I remeber whay did not liked calling commands from python + pep8
-    # anyway it is temporary
-    r = localsh.run("""yum install -y epel-release &&
-                   curl https://trunk.rdoproject.org/centos7-newton/delorean\
--deps.repo -o /etc/yum.repos.d/delorean-deps.repo &&
-                   curl https://buildlogs.centos.org/centos/7/cloud/x86_64/\
-rdo-trunk-newton-tested/delorean.repo""")
-    if r:
-        raise
 
 
 def default_packages(distro, distro_version):
@@ -167,14 +144,6 @@ def local_etccfg_steps(host_record, service_union_global_flags):
         # TODO: do not pass args they can get it..
         step(services=services, global_service_union=service_union_global_flags)
 
-    if 'redis' in services:
-        # TODO support redis style confs as we support ini
-        # WARNING insecure bind usined for redis, without auth
-        localsh.run("sed -i 's/^bind /#bind /' /etc/redis.conf")
-
-    if 'mongod' in services:
-        pass  # TODO
-
     localsh.run('systemctl daemon-reload')
 
 
@@ -205,40 +174,6 @@ def task_cfg_etccfg_steps():
     facility.task_wants(task_pkg_install)
     assert inv.ALL_NODES
     inv.do_do(inv.ALL_NODES, do_local_etccfg_steps)
-
-
-def lb_steps():
-    pass
-
-
-def task_redis_steps():
-    facility.task_wants(task_cfg_etccfg_steps)
-#    localsh.run("systemctl start redis")
-
-
-def task_mongo_steps():
-    facility.task_wants(task_cfg_etccfg_steps)
-#    do_mongo_steps()
-
-
-def ntp_steps():
-    facility.task_wants(task_cfg_etccfg_steps)
-#    do_ntp_steps()
-
-
-def dns_steps():
-    facility.task_wants(task_cfg_etccfg_steps)
-#    do_dns_steps()
-
-
-def task_uwsgi_steps():
-    pass
-
-
-def task_zaqar_steps():
-    facility.task_will_need(task_mongo_steps, task_uwsgi_steps)
-    facility.task_wants(speedling.srv.keystone.step_keystone_ready)
-    pass
 
 
 def create_inventory_and_glb():

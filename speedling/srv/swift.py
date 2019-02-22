@@ -240,7 +240,7 @@ def do_swift_deploy_demo_local():
     object_ip = inv.get_addr_for(inv.get_this_inv(), 'backing_object',
                                  component=comp,
                                  net_attr='swift_object_network')
-    replica_ip = inv.get_addr_for(inv.get_this_inv(), 'replication',
+    replica_ip = inv.get_addr_for(inv.get_this_inv(), 'replication',  # NOQA
                                   component=comp,
                                   net_attr='swift_object_replica_network')
     script = """

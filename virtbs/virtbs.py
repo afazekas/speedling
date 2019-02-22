@@ -676,13 +676,7 @@ def image_virt_customize(name, data, key=None, renew=False):
     os.rename(tmp_link, default_path)
     return ('qcow2', build_image)
 
-# Why the hell the centos image does not have simple raw.xz version ???
 
-
-cent_url_pattern = ('https://cloud.centos.org/centos/7/'
-                    'images/CentOS-7-x86_64-GenericCloud-{key}.qcow2.xz')
-# 1801
-c_s256 = 'b5dc04249b9f1c0ea849b968efe748cf5f3df44c13b70c68308075d9efca3cbd'
 f29_url_pattern = ('https://download.fedoraproject.org/pub/fedora/linux/'
                    'releases/29'
                    '/Cloud/x86_64/images/Fedora-Cloud-Base-29-{key}'

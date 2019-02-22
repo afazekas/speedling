@@ -7,7 +7,6 @@ from speedling import gitutils
 
 from osinsutils import cfgfile
 from osinsutils import localsh
-from osinsutils import usrgrp
 from osinsutils import fetch
 
 
@@ -200,7 +199,6 @@ def task_tempest_conf_steps():
 
 
 def register():
-    sp = conf.get_service_prefix()
     tempest_component = {
       'origin_repo': 'https://github.com/openstack/tempest.git',
       'deploy_source': 'src',
@@ -227,5 +225,6 @@ def register():
     util.dict_merge(tempest_conf_component, ccc)
     facility.register_component(tempest_component)
     facility.register_component(tempest_conf_component)
+
 
 register()

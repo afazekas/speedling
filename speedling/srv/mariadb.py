@@ -254,7 +254,7 @@ def db_url(db, user=None):
 # TODO: wait for pkgs instead etc, do not forget systemdconfig
 # also wait for hostname
 def task_mariadb_steps():
-    facility.task_wants(__main__.task_cfg_etccfg_steps, __main__.lb_steps)
+    facility.task_wants(__main__.task_cfg_etccfg_steps)
     h = inv.hosts_with_service('mariadb')
     host_ips = []
     for n in h:
