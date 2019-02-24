@@ -73,7 +73,7 @@ def etc_glance_glance_registry_conf(): return {
         }
 
 
-def glance_etccfg(services, global_service_union):
+def glance_etccfg(services):
     usrgrp.group('glance', 161)
     usrgrp.user('glance', 161)
     util.base_service_dirs('glance')

@@ -1,7 +1,7 @@
 from speedling import util
 from speedling import inv
 from speedling import tasks
-import __main__
+import speedling
 from speedling import facility
 from speedling import conf
 from speedling import gitutils
@@ -65,11 +65,11 @@ def do_local_nova_service_start():
     tasks.local_os_service_start_by_component('nova')
 
 
-def libvirt_etccfg(services, global_service_union):
+def libvirt_etccfg(services):
     pass
 
 
-def nova_etccfg(services, global_service_union):
+def nova_etccfg(services):
     comp = facility.get_component('nova')
     nova_git_dir = gitutils.component_git_dir(comp)
     usrgrp.group('libvirt')
@@ -196,7 +196,7 @@ def do_libvirt():
 # TODO: ceph feature step  register_ceph_libvirt():
 # n-cpu used for ironic (or nayting non libvirt) will have a different name
 def task_libvirt():
-    facility.task_wants(__main__.task_cfg_etccfg_steps)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)
     # TODO add concept for implied service
     novas = inv.hosts_with_any_service({'nova-compute', 'libvirtd'})
     inv.do_do(novas, do_libvirt)

@@ -2,7 +2,7 @@ from speedling import util
 from speedling import inv
 from speedling import conf
 from speedling import tasks
-import __main__
+import speedling
 from speedling import facility
 
 from osinsutils import cfgfile
@@ -157,7 +157,7 @@ def etc_swift_swift_conf():
                                   'max_header_size': 16384}}
 
 
-def swift_etccfg(services, global_service_union):
+def swift_etccfg(services):
     usrgrp.group('swift', 160)
     usrgrp.user('swift', 160)
     cfgfile.ensure_path_exists('/etc/swift',
@@ -273,7 +273,7 @@ done
 
 def task_swift_steps():
     # TODO: /etc/container-sync-realms.conf
-    facility.task_wants(__main__.task_cfg_etccfg_steps)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)
     # not multinode firendly!
     inv.do_do(inv.hosts_with_any_service(s_store), do_swift_deploy_demo_local)
     inv.do_do(inv.hosts_with_any_service(s_srv), do_swift_service_start)

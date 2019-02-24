@@ -3,7 +3,7 @@ from speedling import inv
 from speedling import util
 from osinsutils import localsh
 import time
-import __main__
+import speedling
 
 from osinsutils import cfgfile
 
@@ -73,7 +73,7 @@ def do_rabbitmq_test_in(candidates):
 
 
 def task_rabbit_steps():
-    facility.task_wants(__main__.task_cfg_etccfg_steps)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)
     rh = inv.hosts_with_service('rabbit')
     hostnames_to_invname = {inv.get_node(n)['inv']['hostname']: n for n in rh}
     hostnames = list(hostnames_to_invname.keys())
@@ -118,7 +118,7 @@ def etc_systemd_system_rabbitmq_server_service_d_limits_conf(): return {
     }
 
 
-def rabbit_etccfg(services, global_service_union):
+def rabbit_etccfg(services):
     # TODO raise the connection backlog, minority stalls ..
     # cfgfile.content_file('',
     #                     rabbit_conf, mode=0o644)

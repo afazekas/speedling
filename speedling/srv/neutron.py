@@ -3,7 +3,7 @@ from speedling import inv
 from speedling import conf
 from speedling import gitutils
 from speedling import tasks
-import __main__
+import speedling
 from speedling import facility
 
 from osinsutils import cfgfile
@@ -23,12 +23,12 @@ def do_ovs():
     localsh.run('systemctl start openvswitch.service')
 
 
-def ovs_etccfg(services, global_service_union):
+def ovs_etccfg(services):
     pass
 
 
 def task_ovs():
-    facility.task_wants(__main__.task_cfg_etccfg_steps)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)
     # TODO add concept for implied service
     ovss = inv.hosts_with_any_service({'neutron-openvswitch-agent', 'ovs'})
     inv.do_do(ovss, do_ovs)
@@ -100,8 +100,10 @@ def etc_neutron_fwaas_driver_ini(): return {
                         '.iptables_fwaas.IptablesFwaasDriver'}}
 
 
-def neutron_etccfg(services, global_service_union):
+def neutron_etccfg(services):
     comp = facility.get_component('neutron')
+    gconf = conf.get_global_config()
+    global_service_union = gconf['global_service_flags']
     usrgrp.group('neutron', 996)
     usrgrp.user('neutron', 993)
     util.base_service_dirs('neutron')
@@ -295,7 +297,7 @@ def do_local_neutron_service_start():
 def task_neutron_steps():
     facility.task_will_need(speedling.srv.rabbitmq.task_rabbit_steps,
                             speedling.srv.keystone.step_keystone_ready,
-                            __main__.task_net_config,
+                            speedling.tasks.task_net_config,
                             speedling.srv.osclients.task_osclients_steps)
     comp = facility.get_component('neutron')
     facility.task_wants(speedling.srv.mariadb.task_mariadb_steps)
@@ -304,7 +306,7 @@ def task_neutron_steps():
     sync_cmd = 'su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron'
     tasks.subtask_db_sync(schema_node_candidate, schema='neutron',
                           sync_cmd=sync_cmd, schema_user='neutron')
-    facility.task_wants(speedling.srv.rabbitmq.task_rabbit_steps, __main__.task_net_config)
+    facility.task_wants(speedling.srv.rabbitmq.task_rabbit_steps, speedling.tasks.task_net_config)
 
     comp = facility.get_component('neutron')
     q_srv = set(comp['services'].keys())

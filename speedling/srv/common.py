@@ -2,7 +2,7 @@ from speedling import facility
 from speedling import inv
 from speedling import util
 from osinsutils import localsh
-import __main__
+import speedling
 
 import logging
 
@@ -30,7 +30,7 @@ def do_selinux_permissive():
 
 
 def task_selinux():
-    facility.task_wants(__main__.task_pkg_install)
+    facility.task_wants(speedling.tasks.task_pkg_install)
     inv.do_do(inv.ALL_NODES, do_selinux_permissive)  # TODO: persistent config
     return  # excluded
     inv.do_do(inv.ALL_NODES, do_selinux)  # httpd nodes differs..
@@ -48,7 +48,7 @@ def do_memcached_service_start():
 
 def task_memcached_steps():
     h = inv.hosts_with_service('memcached')
-    facility.task_wants(__main__.task_pkg_install)
+    facility.task_wants(speedling.tasks.task_pkg_install)
     inv.do_do(h, do_memcached_service_start)
 
 

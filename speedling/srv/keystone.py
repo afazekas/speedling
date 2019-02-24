@@ -2,7 +2,7 @@ from speedling import util
 from speedling import inv
 from speedling import conf
 from speedling import tasks
-import __main__
+import speedling
 from speedling import facility
 from speedling import gitutils
 from speedling.srv import mariadb
@@ -125,7 +125,7 @@ Listen 35357
 """.format(bin_dir='/usr/local/bin')
 
 
-def keystone_etccfg(services, global_service_union):
+def keystone_etccfg(services):
     comp = facility.get_component('keystone')
     keystone_git_dir = gitutils.component_git_dir(comp)  # TODO: only if from source
     usrgrp.group('keystone', 163)
@@ -152,7 +152,7 @@ def do_httpd_restart():
 
 def task_cfg_httpd():
     facility.task_will_need(speedling.srv.common.task_memcached_steps)
-    facility.task_wants(__main__.task_cfg_etccfg_steps, speedling.srv.common.task_selinux)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps, speedling.srv.common.task_selinux)
     keystones = inv.hosts_with_service('keystone')
     inv.do_do(keystones, do_httpd_restart)
     facility.task_wants(speedling.srv.common.task_memcached_steps)
@@ -163,7 +163,7 @@ def fetch_fernet_as_tar():
 
 
 def task_keystone_fernet():
-    facility.task_wants(__main__.task_cfg_etccfg_steps)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)
     keystones = inv.hosts_with_service('keystone')
     src_node = inv.rand_pick(keystones)
     dst_nodes = keystones - src_node

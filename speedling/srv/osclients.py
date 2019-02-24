@@ -1,6 +1,6 @@
 from speedling import util
 from speedling import inv
-import __main__
+import speedling
 from speedling import facility
 from speedling import tasks
 from speedling import piputils
@@ -17,7 +17,7 @@ def do_pip():
 
 
 def task_osclients_steps():
-    facility.task_wants(__main__.task_pkg_install)
+    facility.task_wants(speedling.tasks.task_pkg_install)
     comp = facility.get_component('python-openstackclient')
     if comp['deploy_source'] == 'pip':
         inv.do_do(inv.hosts_with_component('python-openstackclient'), do_pip)

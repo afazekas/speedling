@@ -1,7 +1,6 @@
 from speedling import facility
 from speedling import inv
 from speedling import util
-import __main__
 import speedling
 
 from osinsutils import cfgfile
@@ -13,7 +12,7 @@ LOG = logging.getLogger(__name__)
 
 # this time the config is assembled on the caller
 def do_haproxy_config(data):
-    facility.task_wants(__main__.task_pkg_install)
+    facility.task_wants(speedling.tasks.task_pkg_install)
 
 
 CFG_DATA = {}
@@ -78,7 +77,7 @@ def do_proxy(cfg):
 
 def task_haproxy_steps():
     facility.task_wants(speedling.srv.common.task_selinux,
-                        __main__.task_pkg_install)
+                        speedling.tasks.task_pkg_install)
     proxies = inv.hosts_with_service('haproxy')
     cfg = etc_haproxy_haproxy_cfg()
     inv.do_do(proxies, do_proxy, c_kwargs={'cfg': cfg})

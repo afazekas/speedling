@@ -6,7 +6,6 @@ import os
 
 
 from osinsutils import cfgfile
-from osinsutils import localsh
 
 import logging
 
@@ -48,62 +47,6 @@ LOG.info("Started ..")
 # it must be more generic
 
 
-def default_packages(distro, distro_version):
-    # NOTE: fedora rsync-daemon not just rsync
-
-    # I am expecting fully poppulated images
-    # it just makes sure it is ok
-    # TODO:add other ditros
-    # TODO: split to per component
-    # TODO: add option for pkg/pip
-    # TODO: add option for containers
-    # TODO: check install (skipped pkg)
-    return set(['python3-devel',
-                'python2-devel', 'graphviz', 'novnc', 'openldap-devel', 'python3-mod_wsgi',
-                'httpd', 'libffi-devel', 'libxslt-devel', 'mariadb-server', 'mariadb-devel', 'galera',
-                'httpd-devel', 'rabbitmq-server', 'openssl-devel',
-                'python3-numpy', 'python3-ldap', 'python3-dateutil', 'python3-psutil', 'pyxattr', 'xfsprogs', 'liberasurecode-devel',
-                'python3-libguestfs', 'cryptsetup', 'libvirt-client',
-                'memcached',
-                'iptables', 'haproxy', 'ipset', 'radvd', 'openvswitch', 'conntrack-tools',
-                'pcp-system-tools',
-                'python3-libguestfs',
-                'gcc-c++', 'pcs', 'pacemaker',
-                'rsync-daemon', 'python2-keystonemiddleware', 'python3-PyMySQL',
-                'ceph-mds', 'ceph-mgr', 'ceph-mon', 'ceph-osd', 'ceph-radosgw', 'redis python3-redis', 'python3-memcached',
-                'python3-libvirt', 'python3-keystoneauth1', 'python3-keystoneclient', 'python3-rbd',
-                'python2-subunit', 'python2-jsonschema', 'python2-paramiko'])
-    # rsyslog, os-net-config, jq ..
-
-
-# TODO: add option for skipping package install step (long, frequenly not needed)
-def do_pkg_fetch():
-    pkgs = default_packages('fedora', '29')
-    inv_entry = inv.get_this_inv()
-    comp = set(inv_entry.get('components', tuple()))
-    func_set = set()
-    for c in comp:
-        component = facility.get_component(c)
-        f = component.get('pkg_deps', None)
-        if f:
-            func_set.add(f)
-
-    selected_services = inv_entry['services']
-    for srv in selected_services:
-        try:
-            s = facility.get_service_by_name(srv)
-            f = s['component'].get('pkg_deps', None)
-            if f:
-                func_set.add(f)
-        except Exception:
-            # TODO: remove excption, let it fail, preferably earlier
-            LOG.warn('Service "{srv}" is not a registered service'.format(srv=srv))
-    u = set.union(*[f() for f in func_set])
-    LOG.info("Installing packages ..")
-    localsh.run("yum update -y || yum update -y || yum update -y || yum update -y ")
-    localsh.run(' || '.join(["yum install -y {pkgs}".format(pkgs=' '.join(pkgs.union(u)))]*4))
-
-
 def tempest_deployer_input_conf(): return {
     'auth': {'tempest_roles': 'user'},
     'compute-feature-enabled': {'console_output': True,
@@ -121,59 +64,7 @@ def tempest_deployer_input_conf(): return {
 # not required at this point, but both horizion and keystone could use it
 # ### localsh.run("systemctl start memcached redis mongod")
 
-# NOTE: the agent only nodes might not need the db credntials
-
-
-# seams cheaper to have one task for all etc like cfg steps,
-# than managing many small functions, even tough it could be paralell op with multi functions
-# 'service_union' union of all services from all hosts,
-# in order to know for example do we have lbaas anywhere
-# globale feature flag for example: 'neutron-fwaas'
-
-
-# we might split this funcion later ..
-def local_etccfg_steps(host_record, service_union_global_flags):
-    # aws = host_record.get('apache_wsgi_services', set())
-    # uws = host_record.get('uwsgi_services', set())  # spread
-    services = host_record.get('services', set())
-
-    cfgfile.ensure_path_exists('/srv', mode=0o755)
-
-    steps = facility.get_cfg_steps(services)
-    for step in steps:
-        # TODO: do not pass args they can get it..
-        step(services=services, global_service_union=service_union_global_flags)
-
-    localsh.run('systemctl daemon-reload')
-
-
-# any argless function can be a task,
-# it will be called only onece, and only by
-# the `root` node, the task itself has to interact
-# with the remote nodes
-
-
-def task_establish_repos():
-    # rdo_repos()
-    pass
-
-
-def task_pkg_install():
-    # facility.task_wants(task_establish_repos)
-    gconf = conf.get_global_config()
-    need_pkgs = gconf.get('use_pkg', True)
-    if need_pkgs:
-        inv.do_do(inv.ALL_NODES, do_pkg_fetch)
-
-
-def do_local_etccfg_steps():
-    local_etccfg_steps(inv.get_this_inv(), set())
-
-
-def task_cfg_etccfg_steps():
-    facility.task_wants(task_pkg_install)
-    assert inv.ALL_NODES
-    inv.do_do(inv.ALL_NODES, do_local_etccfg_steps)
+# NOTE: the agent only nodes might not need the db credentials
 
 
 def create_inventory_and_glb():
@@ -193,31 +84,6 @@ def create_inventory_and_glb():
         service_flags.update(services)
         components = node.get('components', EMPTY_SET)
         global_component_flags.update(components)
-
-
-def do_dummy_netconfig():
-    localsh.run('systemctl start openvswitch.service')
-
-    # TODO switch to os-net-config
-    # wait (no --no-wait)
-    localsh.run('ovs-vsctl --may-exist add-br br-ex')
-
-    # add ip to external bridge instead of adding a phyisical if
-    localsh.run("""
-    ifconfig br-ex 192.0.2.1
-    ip link set br-ex up
-    ROUTE_TO_INTERNET=$(ip route get 8.8.8.8)
-    OBOUND_DEV=$(echo ${ROUTE_TO_INTERNET#*dev} | awk '{print $1}')
-    iptables -t nat -A POSTROUTING -o $OBOUND_DEV -j MASQUERADE
-    tee /proc/sys/net/ipv4/ip_forward <<<1 >/dev/null
-    """)
-
-
-def task_net_config():
-    # This is temporary here, normally it should do interface persistent config
-    facility.task_wants(task_pkg_install)
-    inv.do_do(inv.hosts_with_service('neutron-l3-agent'),
-              do_dummy_netconfig)
 
 
 def _main():
@@ -241,8 +107,13 @@ def _main():
 
     cfgfile.ini_file_sync(state_dir + '/tempest-deployer-input.conf',
                           tempest_deployer_input_conf(), owner=os.getuid(), group=os.getgid())
-    goals = [task_net_config, speedling.tasks.task_hostname]
-    # NOTE: less repeatetive not too confusing way ?
+    # any argless function can be a task,
+    # it will be called only onece, and only by
+    # the `root/controller` node, the task itself has to interact
+    # with the remote nodes by calling do_ -s on them
+
+    facility.add_goals([speedling.tasks.task_net_config,
+                        speedling.tasks.task_hostname])
     gconf = conf.get_global_config()
     service_flags = gconf['global_service_flags']
     component_flags = gconf['global_component_flags']
@@ -252,9 +123,7 @@ def _main():
         f()
 
     inv.set_identity()
-    inv.distribute_as_file(inv.ALL_NODES, b'test_content', '/tmp/test')
-    inv.distribute_for_command(inv.ALL_NODES, b'test shell content', 'tee -a /tmp/testcmd')
-    goals.extend(facility.get_goals(service_flags, component_flags))
+    goals = facility.get_goals(service_flags, component_flags)
     facility.start_pending()
     facility.task_wants(*goals)
     # facility.task_will_need(task_ntp, task_selinux, ctx)

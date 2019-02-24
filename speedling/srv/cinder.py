@@ -38,7 +38,7 @@ def etc_cinder_cinder_conf():
                                   'rbd_secret_uuid': gconf['cinder_ceph_libvirt_secret_uuid']}}
 
 
-def cinder_etccfg(services, global_service_union):
+def cinder_etccfg(services):
     usrgrp.group('cinder', 165)
     usrgrp.user('cinder', 165)
     util.base_service_dirs('cinder')

@@ -6,7 +6,6 @@ from speedling import util
 from speedling import conf
 from osinsutils import localsh
 from osinsutils import cfgfile
-import __main__
 import speedling.srv.glance
 import speedling.tasks
 
@@ -219,7 +218,7 @@ def task_key_for_cinder_nova():
                       'client.cinder',
                       {'mon': 'allow r',
                        'osd': 'allow class-read object_prefix rbd_children, allow rwx pool=volumes, allow rwx pool=vms, allow rx pool=images'})
-    facility.task_wants(__main__.task_cfg_etccfg_steps)  # this steps ensure service users
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)  # this steps ensure service users
 
     inv.do_do(inv.hosts_with_any_service(used_by),
               do_cinder_nova_keyring, c_kwargs={'key': key})
@@ -246,7 +245,7 @@ def task_key_glance():
                       'client.glance',
                       {'mon': 'allow r',
                        'osd': 'allow class-read object_prefix rbd_children, allow rwx pool=images'})
-    facility.task_wants(__main__.task_cfg_etccfg_steps)  # this steps ensure service users
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)  # this steps ensure service users
     inv.do_do(inv.hosts_with_service('glance-api'),
               do_glance_keyring, c_kwargs={'key': key})
 
@@ -308,7 +307,7 @@ EOF
 def task_ceph_mon():
     component = facility.get_component('ceph')
     fsid = get_fsid()
-    facility.task_wants(__main__.task_pkg_install, speedling.tasks.task_hostname)
+    facility.task_wants(speedling.tasks.task_pkg_install, speedling.tasks.task_hostname)
     inv_mons = inv.hosts_with_service('ceph-mon')
     mon_host_ips = []
     for m in inv_mons:

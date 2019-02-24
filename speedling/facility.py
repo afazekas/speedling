@@ -17,6 +17,7 @@ def add_pkgs():
 def add_pip_pkgs():
     pass
 
+
 # name: same as the key (auto populated)
 # deploy_source pkg (deb/rpm/..), pypi (pip install ..), container
 # deploy_mode: standalone (systemd service), mod_wsgi, uwsgi, container, nginx, ...
@@ -78,9 +79,21 @@ def get_component(component):
     return REGISTERED_COMPONENTS[component]
 
 
+GOALS = set()
+
+
+def add_goals(goals):
+    GOALS.update(set(goals))
+
+
+def add_goal(goal):
+    GOALS.add(goal)
+
+
+# TODO: have the compose phase to polulate it and travesal now
 def get_goals(srvs, component_flags):
     empty = dict()  # this case should be asserted earlier
-    r = set()
+    r = GOALS
     for s in srvs:
         service = REGISTERED_SERVICES.get(s, empty)
         g = service.get('goal', None)

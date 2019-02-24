@@ -7,7 +7,7 @@ from speedling.srv import haproxy
 import os
 import re
 import time
-import __main__
+import speedling
 
 from osinsutils import cfgfile
 
@@ -113,7 +113,7 @@ AVAILABLE_WHEN_READONLY=0
 DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
 
 
-def mariadb_etccfg(services, global_service_union):
+def mariadb_etccfg(services):
     cfgfile.ensure_path_exists('/etc/systemd/system/mariadb.service.d')
     cfgfile.ini_file_sync('/etc/systemd/system/mariadb.service.d/limits.conf',
                           etc_systemd_system_mariadb_service_d_limits_conf())
@@ -254,7 +254,7 @@ def db_url(db, user=None):
 # TODO: wait for pkgs instead etc, do not forget systemdconfig
 # also wait for hostname
 def task_mariadb_steps():
-    facility.task_wants(__main__.task_cfg_etccfg_steps)
+    facility.task_wants(speedling.tasks.task_cfg_etccfg_steps)
     h = inv.hosts_with_service('mariadb')
     host_ips = []
     for n in h:
