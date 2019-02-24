@@ -265,8 +265,6 @@ def register():
                 'pkg_deps': keystone_pkgs,
                 'cfg_step': keystone_etccfg,
                 'goal': step_keystone_ready}
-    cc = facility.get_component_config_for('keystone')
-    util.dict_merge(keystone, cc)
     facility.register_component(keystone)
 
 

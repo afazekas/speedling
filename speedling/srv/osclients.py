@@ -1,4 +1,3 @@
-from speedling import util
 from speedling import inv
 import speedling
 from speedling import facility
@@ -46,9 +45,7 @@ def register():
       'goal': task_osclients_steps,
     }
 
-    cc = facility.get_component_config_for('python-openstackclient')
     # component related config validations here
-    util.dict_merge(component, cc)
     facility.register_component(component)
 
 

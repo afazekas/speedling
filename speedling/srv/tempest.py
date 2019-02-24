@@ -218,11 +218,7 @@ def register():
       'pkg_deps': tempest_conf_pkgs,
       'goal': task_tempest_conf_steps,
     }
-    cc = facility.get_component_config_for('tempest')
-    ccc = facility.get_component_config_for('tempest_conf')
     # component related config validations here
-    util.dict_merge(tempest_component, cc)
-    util.dict_merge(tempest_conf_component, ccc)
     facility.register_component(tempest_component)
     facility.register_component(tempest_conf_component)
 

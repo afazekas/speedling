@@ -388,8 +388,6 @@ def register():
       'cfg_step': neutron_etccfg,
       'goal': task_neutron_steps
     }
-    cc = facility.get_component_config_for('neutron')
-    util.dict_merge(component, cc)
     facility.register_component(component)
 
     ovs = {'component': 'openvswitch',
@@ -402,8 +400,6 @@ def register():
            'cfg_step': ovs_etccfg,
            'goal': task_ovs}
 
-    cc = facility.get_component_config_for('openvswitch')
-    util.dict_merge(ovs, cc)
     facility.register_component(ovs)
 
 

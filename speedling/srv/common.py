@@ -1,6 +1,5 @@
 from speedling import facility
 from speedling import inv
-from speedling import util
 from osinsutils import localsh
 import speedling
 
@@ -70,8 +69,6 @@ def register():
                  'services': {'memcached': {'deploy_mode': 'standalone'}},
                  'pkg_deps': memcached_pkgs,
                  'goal': task_memcached_steps}
-    cc = facility.get_component_config_for('memcached')
-    util.dict_merge(memcached, cc)
     facility.register_component(memcached)
 
 

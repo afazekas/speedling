@@ -336,8 +336,6 @@ def register():
       'cfg_step': nova_etccfg,
       'goal': task_nova_steps
     }
-    cc = facility.get_component_config_for('nova')
-    util.dict_merge(component, cc)
     facility.register_component(component)
 
     libvirt = {'name': 'libvirt',
@@ -351,8 +349,6 @@ def register():
                'pkg_deps': libvirt_pkgs,
                'cfg_step': libvirt_etccfg,
                'goal': task_libvirt}
-    cc = facility.get_component_config_for('libvirt')
-    util.dict_merge(libvirt, cc)
 
     facility.register_component(libvirt)
 

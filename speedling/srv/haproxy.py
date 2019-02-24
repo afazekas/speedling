@@ -96,8 +96,6 @@ def register():
                'pkg_deps': lambda: set(('haproxy',)),
                'goal': task_haproxy_steps}
 
-    cc = facility.get_component_config_for('haproxy')
-    util.dict_merge(haproxy, cc)
     facility.register_component(haproxy)
 
 

@@ -2,7 +2,6 @@ import os
 
 from speedling import facility
 from speedling import inv
-from speedling import util
 from speedling import conf
 from osinsutils import localsh
 from osinsutils import cfgfile
@@ -405,8 +404,6 @@ def register():
             'pkg_deps': ceph_pkgs,
             'used_by': ['nova-compute', 'glance-api', 'cinder-volume'],
             'goal': task_ceph_steps}
-    cc = facility.get_component_config_for('ceph')
-    util.dict_merge(ceph, cc)
     facility.register_component(ceph)
 
 

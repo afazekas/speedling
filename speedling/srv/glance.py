@@ -197,9 +197,7 @@ def register():
                 'pkg_deps': glance_pkgs,
                 'cfg_step': glance_etccfg,
                 'goal': task_glance_steps}
-    cc = facility.get_component_config_for('glance')
     # component related config validations here
-    util.dict_merge(glance_c, cc)
     facility.register_component(glance_c)
 
 

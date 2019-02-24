@@ -175,8 +175,6 @@ def register():
                  'pkg_deps': cinder_pkgs,
                  'cfg_step': cinder_etccfg,
                  'goal': task_cinder_steps}
-    cc = facility.get_component_config_for('cinder')
-    util.dict_merge(component, cc)
     facility.register_component(component)
 
 

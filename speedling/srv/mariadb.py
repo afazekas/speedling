@@ -326,8 +326,6 @@ def register():
                'pkg_deps': mariadb_pkgs,
                'cfg_step': mariadb_etccfg,
                'goal': task_mariadb_steps}
-    cc = facility.get_component_config_for('mariadb')
-    util.dict_merge(mariadb, cc)
     facility.register_component(mariadb)
 
 

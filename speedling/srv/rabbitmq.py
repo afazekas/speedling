@@ -177,8 +177,6 @@ def register():
               'pkg_deps': rabbit_pkgs,
               'cfg_step': rabbit_etccfg,
               'goal': task_rabbit_steps}
-    cc = facility.get_component_config_for('rabbit')
-    util.dict_merge(rabbit, cc)
     facility.register_component(rabbit)
 
 

@@ -5,6 +5,7 @@ import logging
 from collections import abc
 from collections import defaultdict
 from speedling import util
+from speedling import inv
 
 
 LOG = logging.getLogger(__name__)
@@ -25,17 +26,89 @@ def add_pip_pkgs():
 # instance_name: httpd@instance_name
 # 'compose': 'func_ptr to function executed before tasks but after inventory',
 # 'goal', 'task for this service, it can be shared within the components, it may differ based on action
-# actions: update, reconfiguiry, deploy, wipe, dry_reconfigure, dry_update
+# actions: update, reconfigure, deploy, wipe, dry_reconfigure, dry_update
 REGISTERED_SERVICES = {}
-# TODO: the registered servies has to provide the options only, we need to have configured service list
+# TODO: the registered services has to provide the options only, we need to have configured service list
 #      as well, which includes the selection and read by the service steps
 REGISTERED_COMPONENTS = {}
 
-COMPONENT_CONFIG = defaultdict(dict)
 
+class Component(object):
 
-def get_component_config_for(component_name):
-    return COMPONENT_CONFIG[component_name]
+    default_component_config = {}
+    leaf = True
+
+    def __init__(self, alias='', offset='', dependencies={}):
+        """alias: The services from the nameless version will be refered ASIS,
+                  The named versions will be suffixed @alias
+                  like nova-api@RegionOne nova-api@RegionTWO
+                  The component itself is referred as the lowercase leaf class name,
+                  with the same suffix rules.
+                  The alias is not for region name.
+
+           offset: In may Cases a single component instance hadles all version
+                   of the service on the same node, but in case the component
+                   chooses to allow otherwise their name will include the offset
+                   http@RegionOne@0 http@@0
+           dependencies: Each component can have TYPE slots for other components
+                   The relationship is the user defines the providers as dependency.
+                   """
+        # if your class just customization for a normally leaf class
+        # you want to use the parent's name
+        # I mean if a mariadb subclass just changes some minor way
+        # you do not want every usage to be renamed, but if you start
+        # installing postgres it should have a different name
+        if self.leaf:
+            self.shot_name = self.__class__.__name__.lower()
+        else:
+            next_cls = super(self.__class__, self)
+            while next_cls.leaf:
+                next_cls = super(self.__class__, self)
+            self.shot_name = next_cls.__name__.lower()
+            assert self.shot_name != 'component'
+
+        self.alias = alias
+        self.offset = offset
+        self.dependencies = dependencies
+        if alias or offset:
+            self.name = self.shot_name + '@' + alias
+        if offset:
+            self.name += '@' + str(offset)
+
+    def get_component_config(self):
+        """Without argument only allowed on managed nodes"""
+        i = inv.get_this_inv()
+        ccc = i.get('component_configs')
+        cc = self.default_component_config.deepcopy()
+        if ccc:
+            util.dict_merge(cc, ccc.get(self.name, dict()))
+        return cc
+
+    def compose(self):
+        """called at compose lifecycle if the component or service involved.
+           Only called on the control node"""
+        pass
+
+    def compose_node(self):
+        """The managed nodes call it for nodes base composition,
+           for example required packages."""
+        pass
+
+    def get_final_task(task=None):
+        """acquiring task which can be waited for.
+           usually it is the last task the component made
+           But some cases the component may intiate content fetch for after
+           usage (like datafiles for test)
+           if another task is better for the waiter,
+           for wait he can request it"""
+        pass
+
+    def populate_peer_info_for(nodes=set(), mode=None, network='*'):
+        """Used at compose phase for providing network connectivity information,
+           for other nodes, the exact payload is not defined,
+           The caller knows the calle implementation."""
+        # NOTE: Might be used for firewall rule creation `hints`
+        pass
 
 
 # Deprecated for external use
@@ -52,13 +125,6 @@ def _register_services(srvs):
             REGISTERED_SERVICES[srv['name']] = srv
 
 
-def validate_common(component):
-    deploy_source = component['deploy_source']
-    if 'deploy_source_options' in component:
-        # use some funny exception, it can be opt out
-        assert deploy_source in component['deploy_source_options']
-
-
 def get_service_by_name(name):
     return REGISTERED_SERVICES[name]
 
@@ -72,7 +138,6 @@ def register_component(component):
     for s, d in srvs.items():
         d['component'] = component
     _register_services(srvs)
-    validate_common(component)
 
 
 def get_component(component):
@@ -90,7 +155,7 @@ def add_goal(goal):
     GOALS.add(goal)
 
 
-# TODO: have the compose phase to polulate it and travesal now
+# TODO: have the compose phase to populate it and travesal now
 def get_goals(srvs, component_flags):
     empty = dict()  # this case should be asserted earlier
     r = GOALS

@@ -1,7 +1,6 @@
 import threading
 from osinsutils import localsh
 from speedling import facility
-from speedling import util
 from speedling import gitutils
 from speedling import inv
 
@@ -146,9 +145,6 @@ def register():
       'goal': task_requirements,
     }
 
-    cc = facility.get_component_config_for('requirements')
-    # component related config validations here
-    util.dict_merge(component, cc)
     facility.register_component(component)
 
 
