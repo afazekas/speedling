@@ -561,7 +561,8 @@ def image_download(name, data, key=None, renew=False):
         fetch.download_origin_or_mirror(url, download_path)
         if 'sha256' in data:
             suma = _file_sha256_sum(download_path)
-            print('checksum {}'.format(suma))
+            print('File from {} has incorrect sha256 sum, configured is: {} '
+                  'got: {}'.format(url, data['sha256'], suma))
             assert suma == data['sha256']
     work_file = os.path.join(img_dir, build_id)
     if 'compression' in data:
