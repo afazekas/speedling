@@ -17,6 +17,8 @@ from speedling import util
 from speedling import conf
 
 import speedling.tasks
+
+# These import never ment to called like this, it is a transition
 import speedling.srv.common
 import speedling.srv.rabbitmq
 import speedling.srv.mariadb
@@ -30,6 +32,68 @@ import speedling.srv.tempest
 import speedling.srv.osclients
 import speedling.srv.ceph
 import speedling.srv.haproxy
+
+haproxy = speedling.srv.haproxy.HAProxy()
+memcached = speedling.srv.common.Memcached()
+mariadb = speedling.srv.mariadb.MariaDB(dependencies={'loadbalancer': haproxy})
+
+osclient = speedling.srv.osclients.PythonOpenstackClient()
+keystone = speedling.srv.keystone.Keystone(dependencies={'loadbalancer': haproxy,
+                                                         'sql': mariadb,
+                                                         'memcached': memcached})
+rabbitmq = speedling.srv.rabbitmq.RabbitMQ()
+ceph = speedling.srv.ceph.Ceph()
+glance = speedling.srv.glance.Glance(dependencies={'loadbalancer': haproxy,
+                                                   'sql': mariadb,
+                                                   'memcached': memcached,
+                                                   'messaging': rabbitmq,
+                                                   'keystone': keystone,
+                                                   'backends': [{'sname': 'slceph:rbd', 'component': ceph}]})
+
+cinder = speedling.srv.cinder.Cinder(dependencies={'loadbalancer': haproxy,
+                                                   'sql': mariadb,
+                                                   'memcached': memcached,
+                                                   'messaging': rabbitmq,
+                                                   'keystone': keystone,
+                                                   'backends': [{'sname': 'slceph:rbd', 'component': ceph}]})
+
+swift = speedling.srv.swift.Swift(dependencies={'loadbalancer': haproxy,
+                                                'keystone': keystone,
+                                                'memcached': memcached})
+
+# The thing which takes care of the vm ports
+interface_driver = speedling.srv.neutron.NeutronML2OVS(dependencies={'messaging': rabbitmq})
+virt_driver = speedling.srv.nova.Libvirt()
+
+
+neutron = speedling.srv.neutron.Neutron(dependencies={'loadbalancer': haproxy,
+                                                      'sql': mariadb,
+                                                      'memcached': memcached,
+                                                      'osclient': osclient,
+                                                      'messaging': rabbitmq,
+                                                      'keystone': keystone,
+                                                      'ifdrivers': {'openvswitch': interface_driver}})
+
+
+nova = speedling.srv.nova.Nova(dependencies={'loadbalancer': haproxy,
+                                             'sql': mariadb,
+                                             'memcached': memcached,
+                                             'messaging': rabbitmq,
+                                             'keystone': keystone,
+                                             'virtdriver': virt_driver,
+                                             'cells': {'cell0': {'messaging': rabbitmq}, 'sql': mariadb},
+                                             'networking': neutron,
+                                             'backends': [{'sname': 'slceph:rbd', 'component': ceph}]})
+
+
+# added the things tempest creates resource at setup time
+speedling.srv.tempest.Tempest(dependencies={'keystone': keystone,
+                                            'osclient': osclient,
+                                            'neutron': neutron,
+                                            'nova': nova,
+                                            'glance': glance,
+                                            'enabled_components': [keystone, glance, nova, neutron, swift, cinder]})
+
 
 LOG = logging.getLogger(__name__)
 
@@ -112,15 +176,16 @@ def _main():
     # the `root/controller` node, the task itself has to interact
     # with the remote nodes by calling do_ -s on them
 
-    facility.add_goals([speedling.tasks.task_net_config,
-                        speedling.tasks.task_hostname])
+    # facility.add_goals([speedling.tasks.task_net_config,
+    #                     speedling.tasks.task_hostname])
     gconf = conf.get_global_config()
     service_flags = gconf['global_service_flags']
     component_flags = gconf['global_component_flags']
 
-    funs = facility.get_compose(service_flags, component_flags)
-    for f in funs:
-        f()
+#    funs = facility.get_compose(service_flags, component_flags)
+#    for f in funs:
+#        f()
+    facility.compose()
 
     inv.set_identity()
     goals = facility.get_goals(service_flags, component_flags)

@@ -10,15 +10,15 @@ except:
 inventory = invutil.parse_ansible_invetory_ini(cfg['inventory'])
 
 my_controller_services= {'haproxy', 'mariadb', 'rabbit', 'keystone', 'memcached', 'neutron-server', 'neutron-dhcp-agent', 'neutron-metadata-agent', 'neutron-l3-agent', 'glance-api', 'glance-registry', 'nova-api', 'nova-consoleauth', 'nova-scheduler', 'nova-conductor', 'nova-novncproxy', 'cinder-backup', 'cinder-api', 'cinder-scheduler', 'cinder-volume', 'ceph-osd', 'ceph-mgr', 'ceph-mon',  'nova-placement-api','swift-object', 'swift-container', 'swift-account', 'swift-proxy', 'neutron-meter-agent', 'swift-container-sync', 'neutron-openvswitch-agent', 'openvswitch', 'neutron-metering-agent'}
-my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'openvswitch'}
+my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'openvswitch', 'libvirtd'}
 
 hg = inventory['host_in_group']
 hosts = inventory['hosts']
 
 # Excpeting fully populated images
-global_cfg = {'use_pip': False,
-              'use_git': False,
-              'use_pkg': False}
+global_cfg = {'use_pip': True,
+              'use_git': True,
+              'use_pkg': True}
 util.dict_merge(conf.GLOBAL_CONFIG, global_cfg)
 
 if 'controller' in hg:
@@ -33,7 +33,7 @@ if 'controller' in hg:
               'ssh_user': 'stack',
               'ssh_address': var['sl_ssh_address'],
               'services': my_controller_services,
-              'components': ['python-openstackclient', 'tempest', 'requirements'],
+              'extra_components': ['pythonopenstackclient', 'tempest', 'requirements'],
               'board_uuid': 'str_uuid',
               })
 
@@ -48,6 +48,6 @@ if 'compute' in hg:
               'ssh_user': 'stack',
               'ssh_address': var['sl_ssh_address'],
               'services': my_worker_services,
-              'components': ['python-openstackclient', 'requirements'],
+              'extra_components': ['pythonopenstackclient', 'requirements'],
               'board_uuid': 'str_uuid',
               })

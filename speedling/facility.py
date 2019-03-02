@@ -1,22 +1,21 @@
 import threading
+import os.path
 import time
 import inspect
 import logging
 from collections import abc
 from collections import defaultdict
+from osinsutils import cfgfile
+from osinsutils import localsh
 from speedling import util
+from speedling import conf
 from speedling import inv
-
+from speedling import pkgutils
+from speedling import piputils
+from speedling import gitutils
+from copy import deepcopy
 
 LOG = logging.getLogger(__name__)
-
-
-def add_pkgs():
-    pass
-
-
-def add_pip_pkgs():
-    pass
 
 
 # name: same as the key (auto populated)
@@ -32,11 +31,38 @@ REGISTERED_SERVICES = {}
 #      as well, which includes the selection and read by the service steps
 REGISTERED_COMPONENTS = {}
 
+UNIT_NAME_MAPPING = {}
+
 
 class Component(object):
 
     default_component_config = {}
+    default_deploy_source = 'src'
+    default_deploy_mode = 'standalone'
+    supported_deploy_mode = {'src', 'pkg', 'pip'}
+    services = {}
     leaf = True
+    final_task = None
+
+    def extend_consumers(self, dependencies, prefix=tuple()):
+        # supperted things: [{sname: section, component:Component}, ..] first is default
+        # {sname: Component, sname2: Component2 } # unordered
+        if isinstance(dependencies, abc.Mapping):
+            for k, v in dependencies.items():
+                if isinstance(v, Component):
+                    consumed_as = v.consumers.setdefault(self, [])
+                    consumed_as.append(prefix + tuple(k))
+                if isinstance(v, abc.Mapping):
+                    self.extend_consumers(v, prefix=prefix + tuple(k))
+                if isinstance(v, abc.Iterable):
+                    for d in v:
+                        if isinstance(d, abc.Mapping):
+                            if 'sname' in d:
+                                consumed_as = d['component'].consumers.setdefault(self, [])
+                                consumed_as.append(prefix + (d['sname'],))
+                            else:
+                                self.extend_consumers(d, prefix)
+        # TODO: other cases
 
     def __init__(self, alias='', offset='', dependencies={}):
         """alias: The services from the nameless version will be refered ASIS,
@@ -59,21 +85,39 @@ class Component(object):
         # you do not want every usage to be renamed, but if you start
         # installing postgres it should have a different name
         if self.leaf:
-            self.shot_name = self.__class__.__name__.lower()
+            self.short_name = self.__class__.__name__.lower()
         else:
             next_cls = super(self.__class__, self)
             while next_cls.leaf:
                 next_cls = super(self.__class__, self)
-            self.shot_name = next_cls.__name__.lower()
-            assert self.shot_name != 'component'
+            self.short_name = next_cls.__name__.lower()
+            assert self.short_name != 'component'
 
         self.alias = alias
         self.offset = offset
         self.dependencies = dependencies
+        self.consumers = {}
+        self.extend_consumers(dependencies)
         if alias or offset:
-            self.name = self.shot_name + '@' + alias
+            suffix = '@' + alias
+        else:
+            suffix = ''
         if offset:
-            self.name += '@' + str(offset)
+            suffix += '@' + str(offset)
+        self.name = self.short_name + suffix
+        self.suffix = suffix
+        register_component(self)
+        self.changed = defaultdict(dict)
+        # per instance lock
+        nwc = util.lock_sigleton_call(self.have_content)
+        self.have_content = nwc  # nwc.__get__(self, self)
+
+    def bound_to_instance(self, gf):
+        bounded = Task(gf, self)
+        name = gf.__name__
+        # bounded = gf.__get__(self, self)
+        setattr(self, name, bounded)
+        return bounded
 
     def get_component_config(self):
         """Without argument only allowed on managed nodes"""
@@ -87,12 +131,13 @@ class Component(object):
     def compose(self):
         """called at compose lifecycle if the component or service involved.
            Only called on the control node"""
-        pass
+        if self.final_task:
+            add_goal(self.final_task)
 
-    def compose_node(self):
-        """The managed nodes call it for nodes base composition,
+    def node_compose(self):
+        """The managed nodes call it for node base composition,
            for example required packages."""
-        pass
+        pkgutils.add_compose(self.get_node_packages())
 
     def get_final_task(task=None):
         """acquiring task which can be waited for.
@@ -103,12 +148,272 @@ class Component(object):
            for wait he can request it"""
         pass
 
-    def populate_peer_info_for(nodes=set(), mode=None, network='*'):
+    # NOTE: interface will change
+    def populate_peer_info_for(self, nodes=set(), mode=None, network='*'):
         """Used at compose phase for providing network connectivity information,
            for other nodes, the exact payload is not defined,
            The caller knows the calle implementation."""
         # NOTE: Might be used for firewall rule creation `hints`
         pass
+
+    def populate_extra_cfg_for(self, nodes, component, cfg_extend):
+        if isinstance(component, Component):
+            componenet_name = component.name
+        else:
+            componenet_name = component
+        for n in nodes:
+            node = self.get_node(n)
+            node['cfg_extend'].setdefault(componenet_name, {})
+            cdict = node['cfg_extend'][componenet_name]
+            util.dict_merge(cdict, cfg_extend)
+
+    # NOTE: cache it ?
+    def get_services_global_name(self):
+        """ get service dict with naming rules applied"""
+        if hasattr(self, '_get_services'):
+            return self._get_services
+        self._get_services = {k + self.suffix: v for (k, v) in self.services.items()}
+        return self._get_services
+
+    def call_do(self, hosts, the_do, c_args=tuple(), c_kwargs={}):
+        real_args = (self.name, ) + c_args
+        return inv.do_do(hosts, the_do, real_args, c_kwargs)
+
+    def call_diff_args(self, matrix, do):
+        return inv.do_diff(matrix, do, self.name)
+
+    def distribute_as_file(self, *args, **kwargs):
+        return inv.distribute_as_file(*args, **kwargs)
+
+    def distribute_for_command(self, *args, **kwargs):
+        return inv.distribute_for_command(*args, **kwargs)
+
+    def hosts_with_any_service(self, services):
+        return inv.hosts_with_any_service(set(s + self.suffix for s in services))
+
+    def hosts_with_component(self, component):
+        return inv.hosts_with_component(component + self.suffix)
+
+    def get_state_dir(self, extra=''):
+        return util.get_state_dir(os.path.sep.join((self.name, extra)))
+
+    def hosts_with_service(self, service):
+        return inv.hosts_with_service(service + self.suffix)
+
+    def get_node(self, *args, **kwargs):
+        return inv.get_node(*args, **kwargs)
+
+    def get_this_node(self, *args, **kwargs):
+        return inv.get_this_node(*args, **kwargs)
+
+    def get_this_inv(self, *args, **kwargs):
+        return inv.get_this_inv(*args, **kwargs)
+
+    def get_addr_for(self, *args, **kwargs):
+        return inv.get_addr_for(*args, **kwargs)
+
+    def ini_file_sync(self, target_path, paramters, *args, **kwargs):
+        node = self.get_this_node()
+        cfg_extend = node['cfg_extend']
+        node_inv = node['inv']
+        # we might support callable instead of plain type
+        if self.name in cfg_extend:
+            comp_cfg_extend = cfg_extend[self.name]
+            if target_path in comp_cfg_extend:
+                util.dict_merge(paramters, comp_cfg_extend[target_path])  # modifies the original dict!
+        extend_config = node_inv.get('components', {}).get(self.name, {}).get('extend_config', {})
+        if target_path in extend_config:
+            util.dict_merge(paramters, extend_config[target_path])  # modifies the original dict!
+
+        self.changed['file'][target_path] = cfgfile.ini_file_sync(target_path, paramters,
+                                                                  *args, **kwargs)
+
+    def content_file(self, target_path, *args, **kwargs):
+        self.changed['file'][target_path] = cfgfile.content_file(target_path,
+                                                                 *args, **kwargs)
+
+    def ensure_path_exists(self, link, *args, **kwargs):
+        self.changed['file'][link] = cfgfile.ensure_path_exists(link, *args, **kwargs)
+
+    def haproxy_file(self, target_path,  *args, **kwargs):
+        self.changed['file'][target_path] = cfgfile.haproxy_file(target_path, *args, **kwargs)
+
+    def rabbit_file(self, target_path,  *args, **kwargs):
+        self.changed['file'][target_path] = cfgfile.rabbit_file(target_path, *args, **kwargs)
+
+    def install_file(self, target_path,  *args, **kwargs):
+        self.changed['file'][target_path] = cfgfile.install_file(target_path, *args, **kwargs)
+
+    def ensure_sym_link(self,  target_path,  *args, **kwargs):
+        self.changed['file'][target_path] = cfgfile.ensure_sym_link(target_path, *args, **kwargs)
+
+    def etccfg_content(self, dry=None):
+        """if your config can be done before any command call place it here,
+           this stept meant to be /etc like changes  """
+
+    def have_binaries(self):
+        pkgutils.ensure_compose()
+
+    def have_content(self):
+        self.have_binaries()
+        self.etccfg_content()
+
+    def wait_for_components(self, *comps):
+        task_wants(*(comp.final_task for comp in comps if comp.final_task), caller_name=self.__class__.__name__)
+
+    def get_node_packages(self):
+        """which packages the component needs int current node context"""
+        return set()
+
+    def filter_node_enabled_services(self, candidates):
+        i = self.get_this_inv()
+        services = i.get('services', set())
+        return {c + self.suffix for c in candidates if c + self.suffix in services}
+
+    def get_enabled_services_from_component(self):
+        return self.filter_node_enabled_services(self.services.keys())
+
+    def unit_name_mapping(style):
+        return {}
+
+    # TODO add default bounce condition and coordinated bounce
+
+
+class LoadBalancer(Component):
+    # TODO: make LB abstract to support LB != HAProxy
+    # NOTE: theoretically httpd can do ballancing, but ..
+    pass
+
+
+class SQLDB(Component):
+    # Consider postgres
+    def db_url(*args, **kwargs):
+        raise NotImplementedError
+
+    # provides basic db access to the listed schemas
+    def register_user_with_schemas(self, user, schema_names):
+        raise NotImplementedError
+
+
+class Messaging(Component):
+
+    def get_transport_url(self):
+        raise NotImplementedError
+
+    # scoping are very implementation specific
+    def register_user(self, user):
+        raise NotImplementedError
+
+
+class VirtDriver(Component):
+    pass
+
+
+# TODO: convince the localsh to have retry
+def do_retrycmd_after_content(cname, cmd):
+    self = get_component(cname)
+    self.have_content()
+    retry = 30
+    while True:
+        try:
+            localsh.run(cmd)
+        except:
+            if retry == 0:
+                raise
+        else:
+            break
+
+        time.sleep(0.2)
+        retry -= 1
+
+
+class OpenStack(Component):
+    # TODO: place hare some config possibility like worker number strategy
+    python_version = 3
+    regions = ['RegionOne']  # move vips to region, keystone may register himself to multiple, but others should use single (per instance)
+
+    def get_node_packages(self):
+        pkgs = super(OpenStack, self).get_node_packages()
+        if self.deploy_source == 'src':
+            pyy = 'python' + str(self.python_version)
+            pypkg = pyy + '-devel'
+            pippkg = pyy + '-pip'
+            pkgs.update({pippkg, 'git', pypkg, 'gcc-c++',
+                         'libffi-devel', 'libxslt-devel', 'openssl-devel',
+                         'python3-PyMySQL'})
+        return pkgs
+
+    # overrides
+    def have_content(self):
+        self.have_binaries()  # -devel
+        gconf = conf.get_global_config()
+        need_git = gconf.get('use_git', True)  # switch these if you do have good image
+        need_pip = gconf.get('use_pip', True)
+        if need_git:
+            gitutils.process_component_repo(self)
+        if need_pip:
+            if self.python_version != 2:
+                piputils.setup_develop(self)
+            else:
+                piputils.setup_develop2(self)
+        self.etccfg_content()
+
+
+class InterfaceDriver(Component):
+    pass
+
+
+# TODO: the ciken egg problem can be solvad as egg chickin as well, it will be less confusing
+class StorageBackend(Component):
+    def get_glance_conf_extend(self, sname):
+        """provides full config dict, the name is the section name and ':type' glance expects
+           The response should be repetable, if backand may store as a state."""
+        return {'/etc/glance/glance-api.conf': {}}
+
+    def get_cinder_conf_extend(self, sname):
+        """provides full config dict, the name is the section name cinder expects
+           The response should be repetable, if backand may store as a state."""
+        return {'/etc/cinder/cinder.conf': {}}
+
+    def get_nova_conf_extend(self):
+        return {'/etc/nova/nova.conf': {}}
+
+    def get_waits_for_nova_task(self):
+        return {self.final_task}
+
+    def get_waits_for_glance_task(self):
+        return {self.final_task}
+
+    def get_waits_for_cinder_task(self):
+        return {self.final_task}
+
+    def compose(self):
+        super(StorageBackend, self).compose()
+        for comp, consumed_ases in self.consumers.items():
+            if comp.short_name == 'glance':  # The StorageBackend class should not in this file
+                for consumed_as in consumed_ases:
+                    cfg_extend = self.get_glance_conf_extend(consumed_as[-1])
+                    g_api_nodes = comp.hosts_with_service('glance-api')
+                    self.populate_extra_cfg_for(g_api_nodes, comp, cfg_extend)
+                continue
+            if comp.short_name == 'nova':  # The StorageBackend class should not in this file
+                for consumed_as in consumed_ases:
+                    cfg_extend = self.get_nova_conf_extend()
+                    g_api_nodes = comp.hosts_with_service('nova-compute')
+                    self.populate_extra_cfg_for(g_api_nodes, comp, cfg_extend)
+                continue
+            if comp.short_name == 'cinder':  # The StorageBackend class should not in this file
+                for consumed_as in consumed_ases:
+                    cfg_extend = self.get_cinder_conf_extend(consumed_as[-1])
+                    g_api_nodes = comp.hosts_with_service('cinder-volume')
+                    self.populate_extra_cfg_for(g_api_nodes, comp, cfg_extend)
+
+
+ENSURE_COMPOSE_LOCK = threading.Lock()
+
+
+def do_node_generic_system():
+    pkgutils.ensure_compose()
 
 
 # Deprecated for external use
@@ -130,8 +435,9 @@ def get_service_by_name(name):
 
 
 def register_component(component):
-    REGISTERED_COMPONENTS[component['component']] = component
-    srvs = component.get('services', None)
+    assert component.name not in REGISTERED_COMPONENTS
+    REGISTERED_COMPONENTS[component.name] = component
+    srvs = component.get_services_global_name()
     if not srvs:
         return
 
@@ -155,64 +461,45 @@ def add_goal(goal):
     GOALS.add(goal)
 
 
-# TODO: have the compose phase to populate it and travesal now
 def get_goals(srvs, component_flags):
-    empty = dict()  # this case should be asserted earlier
-    r = GOALS
-    for s in srvs:
-        service = REGISTERED_SERVICES.get(s, empty)
-        g = service.get('goal', None)
-        if g:
-            r.add(g)
-        comp = service.get('component', empty)
-        if isinstance(comp, abc.Mapping):
-            g = comp.get('goal', None)
-            if g:
-                r.add(g)
-    for c in component_flags:
-        comp = get_component(c)
-        g = comp.get('goal', None)
-        if g:
-            r.add(g)
-    return r
+    return GOALS
 
 
-def get_cfg_steps(srvs):
-    empty = dict()  # this case should be asserted earlier
-    r = set()
-    for s in srvs:
-        service = REGISTERED_SERVICES.get(s, empty)
-        g = service.get('cfg_step', None)
-        if g:
-            r.add(g)
-        comp = service.get('component', empty)
-        if isinstance(comp, abc.Mapping):
-            g = comp.get('cfg_step', None)
-            if g:
-                r.add(g)
-    return r
+# cache
+def get_local_active_services():
+    host_record = inv.get_this_inv()
+    services = host_record.get('services', set())
+    srvs = {}
+    for s in services:
+        if s not in REGISTERED_SERVICES:
+            LOG.warning("Unknown service '{}'".format(s))
+        else:
+            srvs[s] = REGISTERED_SERVICES[s]
+    return srvs
 
 
-def get_compose(srvs, component_flags):
-    empty = dict()  # this case should be asserted earlier
-    r = set()
-    for s in srvs:
-        service = REGISTERED_SERVICES.get(s, empty)
-        g = service.get('compose', None)
-        if g:
-            r.add(g)
-        comp = service.get('component', empty)
-        if isinstance(comp, abc.Mapping):
-            g = comp.get('compose', None)
-            if g:
-                r.add(g)
-    for c in component_flags:
-        comp = get_component(c)
-        g = comp.get('compose', None)
-        if g:
-            r.add(g)
-    return r
+# cache
+def get_local_active_components():
+    host_record = inv.get_this_inv()
+    services = get_local_active_services()
+    components = host_record.get('extra_components', set())
+    comps = set()
+    for c in components:
+        comp = REGISTERED_COMPONENTS.get(c, None)
+        if not comp:
+            LOG.warning("Unknown component '{}'".format(c))
+        else:
+            comps.add(comp)
+    for s, r in services.items():
+        c = r.get('component', None)
+        if c:
+            comps.add(c)
+    return comps
 
+
+def compose():
+    for c in REGISTERED_COMPONENTS.values():
+        c.compose()
 
 task_sync_mutex = threading.Lock()
 pending = set()
@@ -275,6 +562,20 @@ def start_pending():
 
 def task_will_need(*args):
     return _taskify(*args)
+
+
+# methods cannot have extra attributes so you either use a class or a closure
+# to duplicate tasks, BTW function copy also possible
+
+class Task(object):
+
+    def __init__(self, fn, ctx):
+        self.fn = fn
+        self.ctx = ctx
+        self.__name__ = fn.__name__
+
+    def __call__(self, *args, **kwargs):
+        self.fn(self.ctx, *args, **kwargs)
 
 
 def task_wants(*args, caller_name=None):
@@ -414,11 +715,12 @@ def register_user_in_domain(domain, user, password, project_roles, email=None):
     users[user] = u
 
 
+# TODO: move to keystone
 # users just for token verify
 def register_auth_user(user, password=None):
     keymgr = util.get_keymgr()
     if not password:
-        password = keymgr('os', user + '@default')
+        password = keymgr('keystone', user + '@default')  # TODO: multi keystone
     register_project_in_domain('Default', 'service', 'dummy service project')
     # TODO: try with 'service' role
     register_user_in_domain(domain='Default', user=user, password=password,
@@ -428,7 +730,7 @@ def register_auth_user(user, password=None):
 def register_service_admin_user(user, password=None):
     keymgr = util.get_keymgr()
     if not password:
-        password = keymgr('os', user + '@default')
+        password = keymgr('keystone', user + '@default')
     register_project_in_domain('Default', 'service', 'dummy service project')
     register_user_in_domain(domain='Default', user=user, password=password,
                             project_roles={('Default', 'service'): ['admin']})

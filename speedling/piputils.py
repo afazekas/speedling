@@ -1,51 +1,25 @@
 import threading
+import logging
 from osinsutils import localsh
 from speedling import facility
 from speedling import gitutils
 from speedling import inv
+from speedling import pkgutils
 
+LOG = logging.getLogger(__name__)
 
 PIP_LOCK = threading.Lock()
 PIP2_LOCK = threading.Lock()
 
 
 # NOTE: This ensure lock thingy is repeated, maybe something smart would be nice
-SYSTEM_HAS_PIP = None
-SYSTEM_HAS_PIP2 = None
-ENSURE_PIP_LOCK = threading.Lock()
-ENSURE_PIP2_LOCK = threading.Lock()
-
-
-def ensure_pip():
-    global SYSTEM_HAS_PIP
-    if SYSTEM_HAS_PIP:
-        return
-    try:
-        ENSURE_PIP_LOCK.acquire()
-        if SYSTEM_HAS_PIP:
-            return
-        localsh.run("pip3 --version ||  yum install -y python3-pip || pip3 --version")
-        SYSTEM_HAS_PIP = True
-    finally:
-        ENSURE_PIP_LOCK.release()
-
-
-def ensure_pip2():
-    global SYSTEM_HAS_PIP2
-    if SYSTEM_HAS_PIP2:
-        return
-    try:
-        ENSURE_PIP2_LOCK.acquire()
-        if SYSTEM_HAS_PIP2:
-            return
-        localsh.run("pip2 --version ||  yum install -y python2-pip || pip2 --version")
-        SYSTEM_HAS_PIP2 = True
-    finally:
-        ENSURE_PIP2_LOCK.release()
 
 
 SYSTEM_HAS_REQ = None
 ENSURE_REQ_LOCK = threading.Lock()
+
+# TODO: make it option for the openstack component
+REQUIREMENTS_URL = 'https://github.com/openstack/requirements.git'
 
 
 def ensure_requirements():
@@ -56,34 +30,34 @@ def ensure_requirements():
         ENSURE_REQ_LOCK.acquire()
         if SYSTEM_HAS_REQ:
             return
-        comp = facility.get_component('requirements')
-        gitutils.procoss_component_repo(comp)
+        gitutils.process_git_repo(REQUIREMENTS_URL)
         SYSTEM_HAS_REQ = True
     finally:
         ENSURE_REQ_LOCK.release()
 
 
 def setup_develop(comp):
-    directory = gitutils.component_git_dir(comp)
+    LOG.info('setup_develop: ' + comp.name)
+    directory = gitutils.url_to_dir(comp.origin_repo)
     pip_install_req(['-r ' + directory + '/requirements.txt'])
     pip_install(['-e ' + directory])
 
 
 def setup_develop2(comp):
-    directory = gitutils.component_git_dir(comp)
+    LOG.info('setup_develop: ' + comp.name)
+    directory = gitutils.url_to_dir(comp.origin_repo)
     pip2_install_req(['-r ' + directory + '/requirements.txt'])
     pip2_install(['-e ' + directory])
 
 
 def req_dir():
-    comp = facility.get_component('requirements')
-    return gitutils.component_git_dir(comp)
+    return gitutils.url_to_dir(REQUIREMENTS_URL)
 
 
 def pip_install_req(targets):
     # target either a 'package' or '-r req.txt', '-e project', input is iterable
     ensure_requirements()
-    ensure_pip()
+    pkgutils.ensure_compose()
     r_dir = req_dir()
     try:
         PIP_LOCK.acquire()
@@ -96,7 +70,7 @@ def pip_install_req(targets):
 def pip_install(targets):
     # target either a 'package' or '-r req.txt', '-e project', input is iterable
     ensure_requirements()
-    ensure_pip()
+    pkgutils.ensure_compose()
     try:
         PIP_LOCK.acquire()
         localsh.run('pip3 install {targets}'.format(
@@ -107,7 +81,7 @@ def pip_install(targets):
 
 def pip2_install_req(targets):
     ensure_requirements()
-    ensure_pip2()
+    pkgutils.ensure_compose()
     r_dir = req_dir()
     try:
         PIP2_LOCK.acquire()
@@ -119,7 +93,7 @@ def pip2_install_req(targets):
 
 def pip2_install(targets):
     ensure_requirements()
-    ensure_pip2()
+    pkgutils.ensure_compose()
     try:
         PIP2_LOCK.acquire()
         localsh.run('pip2 install {targets}'.format(
@@ -128,7 +102,9 @@ def pip2_install(targets):
         PIP2_LOCK.release()
 
 
-# not wited, for early start
+# NOT removed beeing a comopenent, but I change my mind it will be again
+# but it will refuses to have multiple aliases
+# not waited, for early start
 def task_requirements():
     # TODO: limit to nodes with srv component
     inv.do_do(inv.ALL_NODES, ensure_requirements)
@@ -146,6 +122,3 @@ def register():
     }
 
     facility.register_component(component)
-
-
-register()

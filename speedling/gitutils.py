@@ -1,30 +1,15 @@
 # temporary stuff, it will work completly differently
-import multiprocessing
 import threading
 import subprocess
 import os
 import errno
 import logging
 import urllib.parse
+from speedling import pkgutils
 
 from osinsutils import localsh
 
 LOG = logging.getLogger(__name__)
-
-
-# Deprecated
-def gen_repo_urls():
-    # TODO: mirror , fuction translates url
-    return (
-       "https://github.com/openstack/nova.git",
-       "https://github.com/openstack/neutron.git",
-       "https://github.com/openstack/glance.git",
-       "https://github.com/openstack/cinder.git",
-       "https://github.com/openstack/keystone.git",
-       "https://github.com/openstack/swift.git",
-       "https://github.com/openstack/tempest.git",
-       "https://github.com/openstack/requirements.git",
-    )
 
 
 REPO_ROOT = '/opt/stack'
@@ -73,22 +58,18 @@ def ensure_git():
         ENSURE_GIT_LOCK.acquire()
         if SYSTEM_HAS_GIT:
             return
-        localsh.run("git --version ||  yum install -y git || git --version")
+        localsh.test("git --version")
+        pkgutils.get_pkgmgr().install({'git'})
+        localsh.run("git --version")
         SYSTEM_HAS_GIT = True
     finally:
         ENSURE_GIT_LOCK.release()
 
 
-def procoss_component_repo(component):
-    url = component['origin_repo']
+def process_component_repo(component):
+    url = component.origin_repo
     process_git_repo(url)
 
 
 def component_git_dir(component):
-    return url_to_dir(component['origin_repo'])
-
-
-# Deprecated
-def git_fetch_all():
-    p = multiprocessing.Pool(multiprocessing.cpu_count())
-    return p.map(process_git_repo, gen_repo_urls())
+    return url_to_dir(component.origin_repo)

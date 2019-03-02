@@ -6,6 +6,8 @@ from speedling import conf
 from speedling import inv
 
 import os
+import random
+import threading
 
 
 try:
@@ -16,6 +18,26 @@ except ImportError:
 
 # make it later after realy have a chace to select
 
+def lock_sigleton_call(the_do_do):
+    lock = threading.Lock()
+    done = False
+
+    def lock_sigleton_caller(*args, **kwargs):
+        nonlocal lock
+        nonlocal done
+        if done:
+            return
+        try:
+            lock.acquire()
+            if done:
+                return
+            the_do_do(*args, **kwargs)  # can raise multiple times
+            done = True
+        finally:
+            lock.release()
+
+    return lock_sigleton_caller
+
 
 def is_receiver():
     args = conf.get_args()
@@ -23,6 +45,10 @@ def is_receiver():
 
 
 DIR_INITED = set()
+
+
+def rand_pick(hosts, k=1):
+    return set(random.sample(hosts, k))
 
 
 def get_state_dir(suffix=''):
@@ -88,7 +114,7 @@ def dict_merge(destination, source):
 def userrc_script(user, project=None, domain='default'):
     if not project:
         project = user
-    pwd = get_keymgr()('os', '@'.join((user, domain)))
+    pwd = get_keymgr()('keystone', '@'.join((user, domain)))  # TODO: multikeystone
     return """export OS_PROJECT_DOMAIN_ID={domain}
 export OS_USER_DOMAIN_ID={domain}
 export OS_PROJECT_NAME={project}
@@ -121,8 +147,8 @@ def unit_file(unit_name, start_cmd, user, requires=None, restart=None):
                           .format(unit_name=unit_name), d)
 
 
-def keystone_authtoken_section(service_user):
-    # per docs why not, never tested!
+# moved to keystone
+def _keystone_authtoken_section(service_user):
     d = {"auth_url": 'http://' + conf.get_vip('public')['domain_name'] + ':5000/',
          "project_domain_name": 'Default',
          "project_name": 'service',

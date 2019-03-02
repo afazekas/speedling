@@ -1,7 +1,6 @@
 from speedling import facility
 from speedling import inv
 from osinsutils import localsh
-import speedling
 
 import logging
 
@@ -28,48 +27,40 @@ def do_selinux_permissive():
     # persist ?
 
 
+# move to per node stuff
 def task_selinux():
-    facility.task_wants(speedling.tasks.task_pkg_install)
+    #    facility.task_wants(speedling.tasks.task_pkg_install)
     inv.do_do(inv.ALL_NODES, do_selinux_permissive)  # TODO: persistent config
     return  # excluded
-    inv.do_do(inv.ALL_NODES, do_selinux)  # httpd nodes differs..
+    inv.so_do(inv.ALL_NODES, do_selinux)  # httpd nodes differs..
 
 
-def memcached_pkgs():
+def memcached_pkgs(self, ):
     return {'memcached'}
 
 
-# DANGER: no auth service
-# TODO: call by the users
-def do_memcached_service_start():
-    localsh.run('systemctl start memcached')
+def task_memcached_steps(self):
+    h = self.hosts_with_service('memcached')
+#   facility.task_wants(speedling.tasks.task_pkg_install)
+    self.call_do(h, self.do_memcached_service_start)
 
 
-def task_memcached_steps():
-    h = inv.hosts_with_service('memcached')
-    facility.task_wants(speedling.tasks.task_pkg_install)
-    inv.do_do(h, do_memcached_service_start)
+class Memcached(facility.Component):
+    services = {'memcached': {'deploy_mode': 'standalone'}}
+    default_deploy_source = 'pkg'
 
+    def __init__(self, **kwargs):
+        super(Memcached, self).__init__()
+        self.cfg_data = {}
+        self.final_task = self.bound_to_instance(task_memcached_steps)
 
-# WARNING mongo bind_ip to all INSECURE  especially without authentiction!!!
-# if we do not specifi the bind_ip (as we don't) it will bind all
+    # DANGER: no auth service
+    def do_memcached_service_start(cname):
+        self = facility.get_component(cname)
+        self.have_content()
+        localsh.run('systemctl start memcached')
 
-def mongo_conf(): return {None: {
-    'fork': True,
-    'pidfilepath': '/var/run/mongodb/mongod.pid',
-    'logpath': '/var/log/mongodb/mongod.log',
-    'unixSocketPrefix': '/var/run/mongodb',
-    'dbpath': '/var/lib/mongodb'}
-}
-
-
-def register():
-    memcached = {'component': 'memcached',
-                 'deploy_source': 'pkg',
-                 'services': {'memcached': {'deploy_mode': 'standalone'}},
-                 'pkg_deps': memcached_pkgs,
-                 'goal': task_memcached_steps}
-    facility.register_component(memcached)
-
-
-register()
+    def get_node_packages(self):
+        pkgs = super(Memcached, self).get_node_packages()
+        pkgs.update({'memcached', 'python3-memcached'})
+        return pkgs

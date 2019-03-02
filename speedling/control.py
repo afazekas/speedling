@@ -11,6 +11,7 @@ import errno
 import pickle
 import shutil
 import mmap
+import types
 from collections import abc
 
 # temporary solution with threading,
@@ -436,6 +437,8 @@ def func_to_str(func):
     # NOTE: it will work only if the import used without any special thing
     if func.__module__ == '__main__':
         return func.__name__
+    if isinstance(func, types.MethodType):
+        return '.'.join((func.__module__, func.__self__.__class__.__name__, func.__name__))
     return '.'.join((func.__module__, func.__name__))
 
 
@@ -448,12 +451,16 @@ def call_function(hosts, function, c_args=tuple(), c_kwargs={}):
     return task_id
 
 
-def call_function_diff(host_calls, function):
+def call_function_diff(host_calls, function, patch_first=None):
     function_name = func_to_str(function)
     task_id = str(uuid.uuid4())  # todo: consider sequence
     host_msg = {}
+    pf = (patch_first, )
     for host, params in host_calls.items():
-        c_args = params.get('args', tuple())
+        if patch_first:
+            c_args = pf + params.get('args', tuple())
+        else:
+            c_args = params.get('args', tuple())
         c_kwargs = params.get('kwargs', dict())
         host_msg[host] = {'function_name': function_name,
                           'c_args': c_args,

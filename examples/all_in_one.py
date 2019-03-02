@@ -1,13 +1,12 @@
 global_cfg = {'use_pip': True,
-              'use_git': True,  # Set to Fales for zuul
+              'use_git': True,  # Set to False for zuul
               'use_pkg': True}
 util.dict_merge(conf.GLOBAL_CONFIG, global_cfg)
 # You can skip steps if your image is well prepeared ^ use_
 
 
-my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'ceilometer-compute'}
 my_controller_services = {'haproxy', 'mariadb', 'rabbit', 'keystone', 'memcached', 'neutron-server', 'neutron-dhcp-agent', 'neutron-metadata-agent', 'neutron-l3-agent', 'glance-api', 'glance-registry', 'nova-api', 'nova-consoleauth', 'nova-scheduler', 'nova-conductor', 'nova-novncproxy', 'cinder-backup', 'cinder-api', 'cinder-scheduler', 'cinder-volume', 'nova-placement-api','swift-object', 'swift-container', 'swift-account', 'swift-proxy', 'swift-container-sync', 'neutron-metering-agent', 'ceph-mon', 'ceph-osd', 'ceph-mgr', 'openvswitch'}
-my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'openvswitch'}
+my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'openvswitch', 'libvirtd'}
 
 import socket
 
@@ -29,7 +28,7 @@ inv.inventory_register_node(hostname,
 #                             'data': {'vlan':42, 'child_of': 'data_bond', 'preferred_addr_type': 'ipv6'},
 #                             'management': {'interfaces': {'eth0'}, 'addresses': 'default_gw', 'pourpuses': {'sshnet', 'managemenet', 'image'} },
                           },
-              'routes': { 'target': '10.0.0.0/24', 'via_ifs': {'eth7','eth8'}, 'next_hop': {'10.0.0.42', '10.0.0.43'} }, # specify if OR addr
+              'routes': {'target': '10.0.0.0/24', 'via_ifs': {'eth7', 'eth8'}, 'next_hop': {'10.0.0.42', '10.0.0.43'} }, # specify if OR addr
               'extra_interfaces': {'br_ex': {'if_type': 'ovs_bridge', 'addresses': '127.0.0.1'}},
               'default_listen_strategy': 'all_if', # alt specific
               'default_ssh_address_strategy': 'inventory', #sshnet
@@ -38,7 +37,7 @@ inv.inventory_register_node(hostname,
                'apache_wsgi_services': {'dashboard', 'keystone', 'aodh', 'gnocchi'},
               'apache_wsgi_services': {'keystone'},
               'services': my_controller_services.union(my_worker_services),
-              'components': ['python-openstackclient', 'tempest', 'requirements'],
+              'extra_components': {'pythonopenstackclient', 'tempest', 'requirements'},
               'uwsgi_services': ['zaqar'],
               'swift_object_disks': [],
               'swift_account_disks': [],
