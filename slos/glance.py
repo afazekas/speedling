@@ -17,9 +17,10 @@ sp = 'sl-'
 
 def task_glance_steps(self):
     schema_node_candidate = self.hosts_with_service('glance-api')
+    schema_node = util.rand_pick(schema_node_candidate)
     self.wait_for_components(self.sql)
     sync_cmd = 'su -s /bin/sh -c "glance-manage db_sync && glance-manage db load_metadefs" glance'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
     self.wait_for_components(self.messaging)
     # start services
@@ -174,14 +175,14 @@ class Glance(facility.OpenStack):
                                                   'set-header X-Forwarded-Proto http if !{ ssl_fc }'],
                                  'server': servers})
 
-        facility.register_endpoint_tri(region=dr,
-                                       name='glance',
-                                       etype='image',
-                                       description='OpenStack Image Service',
-                                       url_base=url_base + ':' + str(glance_port))
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='glance',
+                                            etype='image',
+                                            description='OpenStack Image Service',
+                                            url_base=url_base + ':' + str(glance_port))
 
         # just auth or admin user ?
-        facility.register_service_admin_user('glance')
+        self.keystone.register_service_admin_user('glance')
         glances = self.hosts_with_any_service(g_srv)
         self.sql.register_user_with_schemas('glance', ['glance'])
         self.sql.populate_peer(glances, ['client'])

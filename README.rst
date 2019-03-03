@@ -30,13 +30,6 @@ Order of magnitude ~5 per manged node used
 Parts
 =====
 
-osinstutils
------------
-
-This the incubator of library which eventually be preinstalled
-on the images, but for now it is transfered with speedling.
-It contains `lower` level config management helpers,
-ATM stiff moving in/out from other directories in the repo.
 
 virtbs
 ------
@@ -50,6 +43,13 @@ It requires root privileges to create bridges (libvirt) and virtual machines.
    ./virtbs.sh wipe 1 # deletes everything in slice1 (prefixed with bs1)
    ./virtbs.sh cycle 1 controller:1 # recreate (destroy + build) one controller node
    ./virtbs.sh cycle 1 controller:1,compute:1 # recreate (destroy + build) one controller and compute node
+
+
+slos
+----
+
+speedling openstack, the actual payload code
+which does the job.
 
 
 speedling

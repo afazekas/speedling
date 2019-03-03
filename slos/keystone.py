@@ -34,15 +34,16 @@ def task_cfg_httpd(self):  # split it into its own componenet delegate wsgi
     facility.task_wants(speedling.tasks.task_selinux)
     keystones = self.hosts_with_service('keystone')
     self.call_do(keystones, self.do_httpd_restart)
-    self.wait_for_components(self.get_memcached())
+    self.wait_for_components(self.memcached)
 
 
 def task_keystone_db(self):
-    self.wait_for_components(self.get_sql())
+    self.wait_for_components(self.sql)
     # TODO: change the function to near db and near key parts
     schema_node_candidate = self.hosts_with_service('keystone')
+    schema_node = util.rand_pick(schema_node_candidate)
     sync_cmd = 'su -s /bin/sh -c "keystone-manage db_sync" keystone'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
 
 def task_cfg_keystone_steps(self):
@@ -56,13 +57,13 @@ def task_cfg_keystone_steps(self):
 def task_keystone_endpoints(self):
     facility.task_wants(self.task_cfg_keystone_steps, self.task_cfg_httpd)
     self.call_do(util.rand_pick(self.hosts_with_service('keystone')),
-                 self.do_keystone_endpoint_sync, c_args=(facility.regions_endpoinds(),))
+                 self.do_keystone_endpoint_sync, c_args=(self.registered_endpoints,))
 
 
 def task_keystone_users(self):
     facility.task_wants(self.task_cfg_keystone_steps, self.task_cfg_httpd)
     self.call_do(util.rand_pick(self.hosts_with_service('keystone')),
-                 self.do_keystone_user_sync, c_args=(facility.service_user_dom(),))
+                 self.do_keystone_user_sync, c_args=(self.registered_user_dom,))
 
 
 def task_keystone_ready(self):
@@ -75,21 +76,19 @@ class Keystone(facility.OpenStack):
     deploy_source = 'src',
     services = {'keystone': {'deploy_mode': 'mod_wsgi'}}
 
-    def get_balancer(self):
-        return self.dependencies.get("loadbalancer", None)
-
-    def get_sql(self):
-        return self.dependencies["sql"]  # raises
-
-    def get_memcached(self):
-        return self.dependencies["memcached"]  # raises
-
     def __init__(self, *args, **kwargs):
         super(Keystone, self).__init__(*args, **kwargs)
         self.peer_info = {}
         self.final_task = self.bound_to_instance(task_keystone_ready)
         for f in [task_keystone_users, task_keystone_endpoints, task_cfg_keystone_steps, task_keystone_db, task_cfg_httpd, task_keystone_fernet]:
             self.bound_to_instance(f)
+        self.sql = self.dependencies["sql"]  # raises
+        self.memcached = self.dependencies["memcached"]  # raises
+        self.loadbalancer = self.dependencies.get("loadbalancer", None)
+
+        # consider the Default domain always existing
+        self.registered_user_dom = {'Default': {}}
+        self.registered_endpoints = {}
 
     def do_keystone_endpoint_sync(cname, enp):
         self = facility.get_component(cname)
@@ -137,7 +136,7 @@ class Keystone(facility.OpenStack):
 
     def etc_keystone_keystone_conf(self): return {
             'DEFAULT': {'debug': True},
-            'database': {'connection': self.get_sql().db_url('keystone')},
+            'database': {'connection': self.sql.db_url('keystone')},
             'token': {'provider': 'fernet'},
             'cache': {'backend': 'dogpile.cache.memcached'}  # TODO: non local memcachedS
             }
@@ -229,7 +228,7 @@ Listen 35357
     def step_keystone_endpoints(self):
         facility.task_wants(task_cfg_keystone_steps, self.task_cfg_httpd)
         self.call_do(util.rand_pick(self.hosts_with_service('keystone')),
-                     self.do_keystone_endpoint_sync, c_args=(facility.regions_endpoinds(),))
+                     self.do_keystone_endpoint_sync, c_args=(self.registered_endpoints))
 
     def step_keystone_users(self):
         facility.task_wants(task_cfg_keystone_steps, self.task_cfg_httpd)
@@ -242,24 +241,22 @@ Listen 35357
 
     def compose(self):
         super(Keystone, self).compose()
-        # it can consider the full inventory and config to influnce facility registered
-        # resources
         url_base = "http://" + conf.get_vip('public')['domain_name']
         dr = conf.get_default_region()
-        facility.register_endpoints(region=dr,
-                                    name='keystone',
-                                    etype='identity',
-                                    description='OpenStack Identity',
-                                    eps={'admin': url_base + ':35357',
-                                         'internal': url_base + ':5000',
-                                         'public': url_base + ':5000'})
-        facility.register_project_in_domain('Default', 'admin', 'members are full admins')
-        facility.register_user_in_domain('Default', 'admin',
-                                         password=util.get_keymgr()(self.name, 'admin@default'),
-                                         project_roles={('Default', 'admin'): ['admin']})
+        self.register_endpoints(region=dr,
+                                name='keystone',
+                                etype='identity',
+                                description='OpenStack Identity',
+                                eps={'admin': url_base + ':35357',
+                                     'internal': url_base + ':5000',
+                                     'public': url_base + ':5000'})
+        self.register_project_in_domain('Default', 'admin', 'members are full admins')
+        self.register_user_in_domain('Default', 'admin',
+                                     password=util.get_keymgr()(self.name, 'admin@default'),
+                                     project_roles={('Default', 'admin'): ['admin']})
         keystones = self.hosts_with_service('keystone')
-        self.get_sql().populate_peer(keystones, ['client'])
-        sql = self.get_sql()
+        self.sql.populate_peer(keystones, ['client'])
+        sql = self.sql
         sql.register_user_with_schemas('keystone', ['keystone'])
         util.bless_with_principal(keystones,
                                   [(self.name, 'admin@default'), (sql.name, 'keystone')])
@@ -288,3 +285,122 @@ Listen 35357
         for n in nodes:
             node = self.get_node(n)
             node['peers']['keystone'] = self.peer_info
+
+    @staticmethod
+    def endp_triple(url):
+        return {'admin': url, 'public': url, 'internal': url}
+
+    def _access_region(self, region):
+        if region in self.registered_endpoints:
+            r_dict = self.registered_endpoints[region]
+        else:
+            r_dict = {}
+            self.registered_endpoints[region] = r_dict
+        return r_dict
+
+    def set_parent_region(self, region, parent):
+        r = self._access_region(region)
+        self._access_region(parent)
+        r['parent_region_id'] = parent
+
+    def set_region_description(self, region, description):
+        r = self._access_region(region)
+        r['description'] = description
+
+    def _access_services(self, region):
+        if 'services' in region:
+            return region['services']
+        services = []
+        region['services'] = services
+        return services
+
+    def _find_named_service(self, srvs, name):
+        # warning linear search
+        for d in srvs:
+            if d['name'] == name:
+                return d
+
+    def register_endpoints(self, region, name, etype, description, eps):
+        r = self._access_region(region)
+        srvs = self._access_services(r)
+        # handle name as primary key
+        s = self._find_named_service(srvs, name)
+        if s:
+            LOG.warning("Redeclaring {name} service in the {region}".format(name=name, region=region))
+        else:
+            s = {'name': name}
+            srvs.append(s)
+        s['type'] = etype
+        s['description'] = description
+        s['endpoints'] = eps
+
+    def register_endpoint_tri(self, region, name, etype, description, url_base):
+        eps = self.endp_triple(url_base)
+        self.register_endpoints(region, name, etype, description, eps)
+
+    # TODO: not all service requires admin role, fix it,
+    # the auth named ones does not expected to be used in place
+    # where admin ness is really needed
+    # the cross service user usually requires admin ness
+
+    # `the admin` user was created by the kystone-manage bootstrap
+
+    # domain name here case sensitive, but may not be in keystone
+    def register_domain(self, name):
+        if name in self.registered_user_dom:
+            return self.registered_user_dom[name]
+        d = {}
+        self.registered_user_dom[name] = d
+        return d
+
+    def register_group_in_domain(self, domain, group):
+        raise NotImplementedError
+
+    # it is also lookup thing, description applied from the first call
+    def register_project_in_domain(self, domain, name, description=None):
+        dom = self.register_domain(domain)
+        if 'projects' not in dom:
+            projects = {}
+            dom['projects'] = projects
+        else:
+            projects = dom['projects']
+        if name not in projects:
+            if description:
+                p = {'description': description}
+            else:
+                p = {}
+            projects[name] = p
+            return p
+        return projects[name]
+
+    def register_user_in_domain(self, domain, user, password, project_roles, email=None):
+        dom = self.register_domain(domain)
+        if 'users' not in dom:
+            users = {}
+            dom['users'] = users
+        else:
+            users = dom['users']
+        u = {'name': user, 'password': password, 'project_roles': project_roles}
+        if email:
+            u['email'] = email
+        users[user] = u
+
+    # TODO: move to keystone
+    # users just for token verify
+    # in the future it will create less privilgeded user
+    def register_auth_user(self, user, password=None):
+        keymgr = util.get_keymgr()
+        if not password:
+            password = keymgr('keystone', user + '@default')  # TODO: multi keystone
+        self.register_project_in_domain('Default', 'service', 'dummy service project')
+        # TODO: try with 'service' role
+        self.register_user_in_domain(domain='Default', user=user, password=password,
+                                     project_roles={('Default', 'service'): ['admin']})
+
+    def register_service_admin_user(self, user, password=None):
+        keymgr = util.get_keymgr()
+        if not password:
+            password = keymgr('keystone', user + '@default')
+        self.register_project_in_domain('Default', 'service', 'dummy service project')
+        self.register_user_in_domain(domain='Default', user=user, password=password,
+                                     project_roles={('Default', 'service'): ['admin']})

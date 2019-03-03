@@ -169,6 +169,7 @@ def bless_with_principal(nodes, prlist):
     keymgr = get_keymgr()
     for (s, p) in prlist:
         pas = keymgr(s, p)
+        s = speedling.keymgrs.real_name(s)
         if s not in creds:
             creds[s] = {p: pas}
         else:

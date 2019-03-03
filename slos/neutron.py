@@ -38,9 +38,10 @@ def task_net_config(self):
 def task_neutron_steps(self):
     self.wait_for_components(self.sql)
     schema_node_candidate = self.hosts_with_service('neutron-server')
+    schema_node = util.rand_pick(schema_node_candidate)
 
     sync_cmd = 'su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
     facility.task_will_need(self.task_net_config)
     self.wait_for_components(self.messaging)
     facility.task_wants(self.task_net_config)
@@ -102,6 +103,9 @@ class Neutron(facility.OpenStack):
         self.messaging = self.dependencies["messaging"]
         self.osclient = self.dependencies["osclient"]
 
+    def find_nova_comp_shared(self):
+        return [c for c in self.consumers.keys() if c.short_name == 'nova'] + [self]
+
     def etc_neutron_conf_d_common_agent_conf(self): return {'agent': {'root_helper': "sudo /usr/local/bin/neutron-rootwrap /etc/neutron/rootwrap.conf",
                                                                       'root_helper_daemon': "sudo /usr/local/bin/neutron-rootwrap-daemon /etc/neutron/rootwrap.conf"}}
 
@@ -109,7 +113,8 @@ class Neutron(facility.OpenStack):
         ivip = conf.get_vip('internal')['domain_name']
         return {'DEFAULT': {'nova_metadata_ip':  ivip,
                             'metadata_proxy_shared_secret':
-                            util.get_keymgr()('shared_secret', 'neutron_nova_metadata')}}
+                            util.get_keymgr()(self.find_nova_comp_shared(),
+                                              'neutron_nova_metadata')}}
 
     def etc_neutron_neutron_conf(self):
         gconf = conf.get_global_config()
@@ -380,22 +385,23 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
         url_base = "http://" + conf.get_vip('public')['domain_name']
         dr = conf.get_default_region()
 
-        facility.register_endpoint_tri(region=dr,
-                                       name='neutron',
-                                       etype='network',
-                                       description='OpenStack Network Service',
-                                       url_base=url_base + ':9696/')
-        facility.register_service_admin_user('neutron')
-        facility.register_service_admin_user('nova_for_neutron')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='neutron',
+                                            etype='network',
+                                            description='OpenStack Network Service',
+                                            url_base=url_base + ':9696/')
+        self.keystone.register_service_admin_user('neutron')
+        self.keystone.register_service_admin_user('nova_for_neutron')
         neutrons = self.hosts_with_any_service(set(self.services.keys()))
         self.messaging.populate_peer(neutrons)
         self.sql.register_user_with_schemas('neutron', ['neutron'])
         self.sql.populate_peer(neutrons, ['client'])  # TODO: maybe not all node needs it
+        secret_service = self.find_nova_comp_shared()
         util.bless_with_principal(neutrons,
-                                  [(self.keystone.name, 'neutron@default'),
-                                   (self.keystone.name, 'nova_for_neutron@default'),
-                                   (self.sql.name, 'neutron'),
-                                   ('shared_secret', 'neutron_nova_metadata'),
+                                  [(self.keystone, 'neutron@default'),
+                                   (self.keystone, 'nova_for_neutron@default'),
+                                   (self.sql, 'neutron'),
+                                   (secret_service, 'neutron_nova_metadata'),
                                    (self.messaging.name, 'openstack')])
 
 

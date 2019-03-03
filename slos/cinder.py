@@ -17,8 +17,9 @@ def task_cinder_steps(self):
     self.wait_for_components(self.sql)
 
     schema_node_candidate = self.hosts_with_service('cinder-api')
+    schema_node = util.rand_pick(schema_node_candidate)
     sync_cmd = 'su -s /bin/sh -c "cinder-manage db sync" cinder'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
     # start services
     self.call_do(self.hosts_with_any_service(c_srv), self.do_local_cinder_service_start)
@@ -149,22 +150,22 @@ cinder ALL = (root) NOPASSWD: /usr/bin/cinder-rootwrap /etc/cinder/rootwrap.conf
         url_base = "http://" + conf.get_vip('public')['domain_name']
         dr = conf.get_default_region()
 
-        facility.register_endpoint_tri(region=dr,
-                                       name='cinder',
-                                       etype='volume',
-                                       description='OpenStack Volume Service',
-                                       url_base=url_base + ':8776/v1/$(tenant_id)s')
-        facility.register_endpoint_tri(region=dr,
-                                       name='cinderv2',
-                                       etype='volumev2',
-                                       description='OpenStack Volume Service',
-                                       url_base=url_base + ':8776/v2/$(tenant_id)s')
-        facility.register_endpoint_tri(region=dr,
-                                       name='cinderv3',
-                                       etype='volumev3',
-                                       description='OpenStack Volume Service',
-                                       url_base=url_base + ':8776/v3/$(tenant_id)s')
-        facility.register_service_admin_user('cinder')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='cinder',
+                                            etype='volume',
+                                            description='OpenStack Volume Service',
+                                            url_base=url_base + ':8776/v1/$(tenant_id)s')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='cinderv2',
+                                            etype='volumev2',
+                                            description='OpenStack Volume Service',
+                                            url_base=url_base + ':8776/v2/$(tenant_id)s')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='cinderv3',
+                                            etype='volumev3',
+                                            description='OpenStack Volume Service',
+                                            url_base=url_base + ':8776/v3/$(tenant_id)s')
+        self.keystone.register_service_admin_user('cinder')
         comp = self
         cins = self.hosts_with_any_service(set(comp.services.keys()))
         self.sql.register_user_with_schemas('cinder', ['cinder'])

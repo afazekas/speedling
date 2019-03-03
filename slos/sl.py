@@ -228,8 +228,9 @@ def pre_flight():
     state_dir = args.state_dir
     cfgfile.content_file(state_dir + '/admin-openrc.sh',
                          util.userrc_script('admin'), owner=os.getuid(), group=os.getgid())
-    facility.register_project_in_domain('Default', 'demo', 'demo project')
-    facility.register_user_in_domain('Default', 'demo',
+    keystone = facility.get_component('keystone')
+    keystone.register_project_in_domain('Default', 'demo', 'demo project')
+    keystone.register_user_in_domain('Default', 'demo',
                                      password=util.get_keymgr()('keystone', 'demo@default'),
                                      email='demo_user@noreply.com',
                                      project_roles={('Default', 'demo'): ['user']})

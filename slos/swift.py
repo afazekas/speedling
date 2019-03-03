@@ -275,12 +275,12 @@ done
         url_base = "http://" + conf.get_vip('public')['domain_name']
         dr = conf.get_default_region()
 
-        facility.register_endpoint_tri(region=dr,
-                                       name='swift',
-                                       etype='object-store',
-                                       description='Swift Storage Service',
-                                       url_base=url_base + ':8080/v1/AUTH_$(tenant_id)s')
-        facility.register_service_admin_user('swift')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='swift',
+                                            etype='object-store',
+                                            description='Swift Storage Service',
+                                            url_base=url_base + ':8080/v1/AUTH_$(tenant_id)s')
+        self.keystone.register_service_admin_user('swift')
         sp = self.hosts_with_service('swift-proxy')
         util.bless_with_principal(sp,
                                   [(self.keystone.name, 'swift@default')])

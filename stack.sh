@@ -34,4 +34,4 @@ if [[ "$*" == *"--all-in-one"* ]] || [[ "$*" == *"--inv-extend"* ]]; then
 	extra=""
 fi
 
-PYTHONPATH=.:./payload python3 payload/slos/sl.py $extra "$@"  </dev/null
+PYTHONPATH=. python3 slos/sl.py $extra "$@"  </dev/null

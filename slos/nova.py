@@ -48,16 +48,17 @@ def task_nova_steps(self):
     self.wait_for_components(self.messaging, self.keystone)
     novas = self.hosts_with_service('nova-api')
     schema_node_candidate = self.hosts_with_service('nova-api')
+    schema_node = util.rand_pick(schema_node_candidate)
 
     sync_cmd = 'su -s /bin/sh -c "nova-manage api_db sync" nova'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
     # actual cell sync is the nova db sync
     sync_cmd = 'su -s /bin/sh -c "nova-manage cell_v2 map_cell0 && (nova-manage cell_v2 list_cells | grep \'^| .*cell1\' -q || nova-manage cell_v2 create_cell --name=cell1 --verbose)"'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
     sync_cmd = 'su -s /bin/sh -c "nova-manage db sync" nova'
-    self.call_do(schema_node_candidate, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
     self.wait_for_components(self.messaging)
     # start services
@@ -120,6 +121,7 @@ class Nova(facility.OpenStack):
         self.keystone = self.dependencies["keystone"]
         self.messaging = self.dependencies["messaging"]
         self.virtdriver = self.dependencies["virtdriver"]
+        self.networking = self.dependencies["networking"]
 
     def etc_nova_nova_conf(self):
         # NOTE! mariadb.db_url not required on compute when the use_conductur is False
@@ -128,7 +130,7 @@ class Nova(facility.OpenStack):
         neutron_section = self.keystone.authtoken_section('neutron_for_nova')
         neutron_section.update(
                  {'service_metadata_proxy': True,
-                  'metadata_proxy_shared_secret': util.get_keymgr()('shared_secret',
+                  'metadata_proxy_shared_secret': util.get_keymgr()([self, self.networking],
                                                                     'neutron_nova_metadata')})  # add dual suffix
         if util.get_keymanager().has_creds(self.keystone.name, 'placement@default'):
             placement_section = self.keystone.authtoken_section('placement')
@@ -312,19 +314,19 @@ filters_path=/etc/nova/migration/rootwrap.d
         dr = conf.get_default_region()
         url_base = "http://" + pv
 
-        facility.register_endpoint_tri(region=dr,
-                                       name='nova',
-                                       etype='compute',
-                                       description='OpenStack Compute Service',
-                                       url_base=url_base + ':8774/v2.1/$(tenant_id)s')
-        facility.register_endpoint_tri(region=dr,
-                                       name='placement',
-                                       etype='placement',
-                                       description='OpenStack Nova Placement Service',
-                                       url_base=url_base + ':8780')
-        facility.register_service_admin_user('nova')
-        facility.register_service_admin_user('placement')
-        facility.register_service_admin_user('neutron_for_nova')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='nova',
+                                            etype='compute',
+                                            description='OpenStack Compute Service',
+                                            url_base=url_base + ':8774/v2.1/$(tenant_id)s')
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='placement',
+                                            etype='placement',
+                                            description='OpenStack Nova Placement Service',
+                                            url_base=url_base + ':8780')
+        self.keystone.register_service_admin_user('nova')
+        self.keystone.register_service_admin_user('placement')
+        self.keystone.register_service_admin_user('neutron_for_nova')
         # TODO: revisit which components needs what and skip it from cfg
         rh = self.hosts_with_any_service({'nova-api', 'nova-compute',
                                           'nova-scheduler', 'nova-conductor',
@@ -334,11 +336,11 @@ filters_path=/etc/nova/migration/rootwrap.d
         novas = self.hosts_with_any_service(n_srv)
         self.sql.register_user_with_schemas('nova', ['nova', 'nova_api', 'nova_cell0'])  # TODO: use the cell deps
         util.bless_with_principal(novas,
-                                  [(self.keystone.name, 'nova@default'),
-                                   (self.keystone.name, 'neutron_for_nova@default'),
-                                   ('shared_secret', 'neutron_nova_metadata'),
-                                   (self.sql.name, 'nova'),
-                                   (self.messaging.name, 'openstack')])
+                                  [(self.keystone, 'nova@default'),
+                                   (self.keystone, 'neutron_for_nova@default'),
+                                   ([self, self.networking], 'neutron_nova_metadata'),
+                                   (self.sql, 'nova'),
+                                   (self.messaging, 'openstack')])
         util.bless_with_principal(novas, [(self.keystone.name, 'placement@default')])  # n-cpu using it
         self.sql.populate_peer(rh, ['client'])  # TODO: maybe not all node needs it
 

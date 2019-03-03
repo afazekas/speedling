@@ -33,5 +33,5 @@ $ssh_cmd  sudo cp /home/stack/.ssh/id_rsa /root/.ssh/id_rsa
 $scp_cmd sl-hosts-bs1 $hostname:speedling.ini
 date
 #$ssh_cmd  sudo PYTHONPATH=. strace -f -s 1024 python3 speedling/sl.py </dev/null
-$ssh_cmd  ./stack.sh --inv-extend speedling.ini -A
+$ssh_cmd  ./stack.sh --inv-extend speedling.ini -A "$@"
 date
