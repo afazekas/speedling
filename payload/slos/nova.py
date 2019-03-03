@@ -3,8 +3,8 @@ from speedling import tasks
 from speedling import facility
 from speedling import conf
 from speedling import gitutils
-from osinsutils import localsh
-from osinsutils import usrgrp
+from speedling import localsh
+from speedling import usrgrp
 
 import logging
 

@@ -10,10 +10,10 @@ except ImportError:
     from pipes import quote as cmd_quote
 
 # WARNING: improper shell escapes, evil guy can be evil!
-from osinsutils import localsh
-from osinsutils import cfgfile
-from osinsutils import netutils
-from osinsutils import fetch
+from speedling import localsh
+from speedling import cfgfile
+from speedling import netutils
+from speedling import fetch
 
 import uuid
 import errno

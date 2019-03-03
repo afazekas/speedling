@@ -6,65 +6,77 @@ import sys
 ARGS = None
 
 
-def construct_parser():
+def construct_parser(*extras):
     parser = argparse.ArgumentParser(
                       description='Speedling openstack dev installler')
     parser.add_argument('-r', '--receiver',
                         help='Receiver mode act on remote host',
                         action='store_true')
-    parser.add_argument('-i', '--identity',
+    # -I causes some trouble ATM, so it might be removed
+    parser.add_argument('-I', '--identity',
                         help='The controller node act like the given node without remote access')
-    parser.add_argument('-I', '--all-remote',
-                        action='store_true',
-                        help='The controller node does not ties to figure out his position')
     parser.add_argument('-s', '--state-dir',
                         default='./state',
                         help='Directory used for store deploy state used at reruns created at first run')
-    parser.add_argument('--wipe',
-                        action='store_true',
-                        help='Used in case you want to manage a new deployment with the given state dir (delete old state recirsive)')
     parser.add_argument('-a', '--asset-dir',
                         default='./asset',
                         help='Extra deploy resources like patches, database snapshots..')
-    parser.add_argument('-c', '--config',
-                        help='acquire global conf and inventory',
-                        default='examples/all_in_one.py')
-    parser.add_argument('-o', '--config-option',
-                        help='acquire global conf and inventory',
-                        default='{"inventory":"speedling.ini"}')
+    parser.add_argument('-e', '--extra-module', action='append', type=list,
+                        default=[],
+                        help='Extra module directories to transfer. pyo, pyc excluded')
+    parser.add_argument('--dont-touch-pkgs',
+                        action='store_true',
+                        help='skip all calls to the pkg manger, '
+                             'use it if you are using machines with preisntalled packages')
+    parser.add_argument('--dont-touch-pypi',
+                        action='store_true',
+                        help='skip all calls for pypi content, '
+                             'use it if you are using machines with preisntalled pips')
+    parser.add_argument('--dont-touch-src-repos',
+                        action='store_true',
+                        help='Use when your CI manages the srouce reposities')
+
+    parser.add_argument('-A', '--alrady-have-everything',
+                        help="Implies --dont-touch-src-repos, --dont-touch-pypi, --dont-touch-pkgs",
+                        action='store_true')
+
+    for extra in extras:
+        extra(parser)
 
     return parser
 
 
-def _conf():
-    global ARGS
-    parser = construct_parser()
-    ARGS = parser.parse_args(sys.argv[1:])
-
-
-def get_args():
-    # TODO: repalce func without if
-    if not ARGS:
-        _conf()
-    return ARGS
-
-
-GLOBAL_CONFIG_EXAMPLE = {'default_region': 'RegionOne',
-                         'service_prefix': 'sl-',
-                         'deployment_id': 42,
-                         'allow_address_fallback': ['default_gw', 'sshed_address'],  # order matters
-                         'deploymant_name': 'OpenStack',
+GLOBAL_CONFIG_EXAMPLE = {'allow_address_fallback': ['default_gw', 'sshed_address'],  # order matters
                          'cinder_ceph_libvirt_secret_uuid': '457eb676-33da-42ec-9a8c-9293d545c337',  # move to ceph usage feature
-                         'gnetworks': {'access': {'pools': {'defualt': {'subnet': '172.16.1.0/24', 'pourposes': {'sshnet', 'management'}}}}},
                          'vip': {'public': {'domain_name': '172.16.1.2', 'internal_address': '172.16.1.2'},
                                  'internal': {'domain_name': '172.16.1.2', 'internal_address': '172.16.1.2'}}}
 
 GLOBAL_CONFIG = GLOBAL_CONFIG_EXAMPLE
 
 
+def args_init(extras=tuple()):
+    global ARGS
+    parser = construct_parser(extras)
+    ARGS = parser.parse_args(sys.argv[1:])
+    # TODO: rename these to match cfg option
+    if ARGS.dont_touch_pkgs or ARGS.alrady_have_everything:
+        GLOBAL_CONFIG['use_pkg'] = False
+    if ARGS.dont_touch_pypi or ARGS.alrady_have_everything:
+        GLOBAL_CONFIG['use_pip'] = False
+    if ARGS.dont_touch_src_repos or ARGS.alrady_have_everything:
+        GLOBAL_CONFIG['use_git'] = False
+
+    return ARGS
+
+
+def get_args():
+    return ARGS
+
+
 # internal_address can be used in the hosts file,
 # usable in case single address (floating) or anycast
 # internal only vip may net need an domain name
+# THIS WILL BE REMOVED
 def get_vip(vip):
     return GLOBAL_CONFIG['vip'][vip]
 

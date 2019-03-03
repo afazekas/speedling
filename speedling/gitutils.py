@@ -7,7 +7,7 @@ import logging
 import urllib.parse
 from speedling import pkgutils
 
-from osinsutils import localsh
+from speedling import localsh
 
 LOG = logging.getLogger(__name__)
 

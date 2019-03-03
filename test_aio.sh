@@ -32,5 +32,5 @@ $scp_cmd /srv/virtbs/keys/id_rsa $hostname:.ssh/
 $ssh_cmd  sudo cp /home/stack/.ssh/id_rsa /root/.ssh/id_rsa
 date
 #$ssh_cmd  sudo PYTHONPATH=. strace -f -s 1024 python3 speedling/sl.py </dev/null
-$ssh_cmd PYTHONPATH=. python3 speedling/sl.py  </dev/null
+$ssh_cmd ./stack.sh
 date

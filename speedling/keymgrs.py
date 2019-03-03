@@ -4,7 +4,7 @@ except:
     import json
 
 import errno
-from osinsutils import string_utils
+from speedling import string_utils
 import fcntl
 # json used instead of yaml
 # because there is no jq like poppular fast shell utility for yaml

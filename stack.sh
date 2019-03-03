@@ -29,4 +29,9 @@ else
    fi
 fi
 
-PYTHONPATH=. python3 speedling/sl.py  </dev/null
+extra=--all-in-one
+if [[ "$*" == *"--all-in-one"* ]] || [[ "$*" == *"--inv-extend"* ]]; then
+	extra=""
+fi
+
+PYTHONPATH=.:./payload python3 payload/slos/sl.py $extra "$@"  </dev/null

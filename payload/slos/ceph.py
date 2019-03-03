@@ -2,10 +2,10 @@ import os
 
 from speedling import facility
 from speedling import conf
-from osinsutils import localsh
-from osinsutils import cfgfile
+from speedling import localsh
+from speedling import cfgfile
+from speedling import util
 import speedling.tasks
-import util
 
 
 import logging
@@ -15,16 +15,23 @@ LOG = logging.getLogger(__name__)
 
 # TODO: add support for attribute_change
 def task_handle_pools(self):
+    facility.task_wants(self.task_handle_osds)
     inv_mons = self.hosts_with_service('ceph-mon')
     pooler = util.rand_pick(inv_mons)
     pools = set(('volumes', 'images', 'vms', 'gnocchi'))
     self.call_do(pooler, self.do_ensure_pools, c_kwargs={'pools': pools})
 
 
+def task_handle_osds(self):
+    fsid = self.get_fsid()
+    facility.task_wants(self.task_ceph_mon)
+    self.call_do(self.hosts_with_service('ceph-osd'),
+                 self.do_ceph_deploy_all_in_one_demo, c_kwargs={'fsid': fsid})
+
+
 def task_ceph_steps(self):
     self.create_ceph_state_dirs()  # move to mon or wait to mon
     self = facility.get_component('ceph')
-    fsid = self.get_fsid()
     sub_tasks_to_wait = []
     facility.task_wants(self.task_ceph_mon)
 
@@ -35,8 +42,6 @@ def task_ceph_steps(self):
         sub_tasks_to_wait.append(self.task_setup_mgr)
         facility.task_will_need(self.task_setup_mgr)
 
-    self.call_do(self.hosts_with_service('ceph-osd'),
-                 self.do_ceph_deploy_all_in_one_demo, c_kwargs={'fsid': fsid})
     facility.task_will_need(self.task_handle_pools)  # mon is crahsing if it called before we have any osd
     sub_tasks_to_wait.append(self.task_handle_pools)
     facility.task_wants(*sub_tasks_to_wait)
@@ -157,7 +162,8 @@ class Ceph(facility.StorageBackend):
         super(Ceph, self).__init__(**kwargs)
         self.final_task = self.bound_to_instance(task_ceph_steps)
         [self.bound_to_instance(f) for f in [task_key_for_cinder_nova, task_setup_mgr,
-                                             task_handle_pools, task_key_glance, task_ceph_mon]]
+                                             task_handle_pools, task_key_glance,
+                                             task_ceph_mon, task_handle_osds]]
         self.peer_info = {}
         self.pool_registry = {}
         self.access_registry = {}
@@ -312,10 +318,8 @@ systemctl start ceph-mgr@$name
         target = '/etc/ceph/ceph.client.cinder.keyring'
         # TODO: insecure, use posix acl or shared group, but it should not be world readable
         # consider more keys ..
-        try:
-            self.content_file(target, key, owner='cinder', group='cinder', mode=0o644)
-        except:
-            self.content_file(target, key, owner='nova', group='nova', mode=0o644)
+        # we need to call to local cinder/nova to have_content before
+        self.content_file(target, key, owner='root', group='root', mode=0o644)
 
     def do_glance_keyring(cname, key):
         self = facility.get_component(cname)

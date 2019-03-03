@@ -1,6 +1,6 @@
 import subprocess
 import threading
-import os
+import os.path
 import io
 import tempfile
 import logging
@@ -13,6 +13,10 @@ import shutil
 import mmap
 import types
 from collections import abc
+from shlex import quote
+from speedling import conf
+
+import __main__
 
 # temporary solution with threading,
 # most of the locaed opt can be considered atomic in python so likely we can work with less lock
@@ -54,17 +58,34 @@ payload_size = None
 payload_path = None
 
 
+def tar(targetfile, directories):
+    args = []
+    for d in directories:
+        dire = os.path.abspath(d)
+        split = dire.split(os.path.sep)
+        base = os.path.sep.join(split[0:-1])
+        leaf = split[-1]
+        args.append('-C ' + quote(base) + ' ' + quote(leaf))
+    dirs = ' '.join(args)
+    tar_cmd = "tar -czf {payload} --exclude='*.pyc' --exclude='*.pyo' {dirs}".format(dirs=dirs,
+                                                                                     payload=targetfile)
+    _run(tar_cmd)
+
+
 def init_transfer():
     global payload_size, payload_path
-    location = __file__.split(os.sep)
-    workdir = os.sep.join((location[0:-2]))
+    location = __file__.split(os.path.sep)
+    sl_dir = os.sep.join((location[0:-1]))  # speedling/control.py
+
+    main_loc = __main__.__file__.split(os.path.sep)
+    main_dir = os.sep.join(main_loc[0:-1])
     payload_size = -1
     temp_dir = tempfile.mkdtemp()
     # TODO: delete on exit
     payload_path = temp_dir + '/payload.tar.gz'
-    tar_cmd = "tar -C {workdir} -czf {payload} --exclude='*.pyc' --exclude='*.pyo' speedling osinsutils".format(workdir=workdir,
-                                                                                                                payload=payload_path)
-    _run(tar_cmd)
+    extra = set(conf.get_args().extra_module)
+    dirs = {main_dir, sl_dir}.union(extra)
+    tar(payload_path, dirs)
     payload_size = os.path.getsize(payload_path)
     atexit.register(shutil.rmtree, temp_dir)
 
@@ -242,8 +263,11 @@ def init_connection(host, host_address=None, user=None, ssh_args=None):
     assert(payload_size)
     # Warning UserKnownHostsFile=/dev/null is not secure..
     # todo: dafult to aes (aes-128), consider compression
+    main_loc = __main__.__file__.split(os.path.sep)
+    main_py = os.sep.join(main_loc[-2:])
     args = ['ssh', user_part + host_address, ] + ssh_args + [
-            'read a; workdir=`mktemp -d`; cd "$workdir"; dd iflag=fullblock bs="$a" count=1 2>/dev/null| tar xz; sudo bash -c \'exec 4>&0 ; exec 5>&1 ; exec 6>&2; PYTHONPATH=. exec python3 speedling/sl.py -r -i "{host}" </dev/null  &>"$workdir"/worker.out\''.format(host=host)]
+            """read a; workdir=`mktemp -d`; cd "$workdir"; dd iflag=fullblock bs="$a" count=1 2>/dev/null |
+tar xz; sudo bash -c 'exec 4>&0 ; exec 5>&1 ; exec 6>&2; PYTHONPATH=. exec python3 {main} -r -I "{host}" </dev/null  &>"$workdir"/worker.out'""".format(host=host, main=main_py)]
 
     # will it be zombiee without wait or communicate call ?
     p = subprocess.Popen(args, stdin=subprocess.PIPE,

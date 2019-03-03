@@ -1,5 +1,5 @@
-import osinsutils.keymgrs
-from osinsutils import cfgfile
+import speedling.keymgrs
+from speedling import cfgfile
 
 from collections import abc
 from speedling import conf
@@ -15,8 +15,6 @@ try:
 except ImportError:
     from pipes import quote as cmd_quote  # noqa others can use form here
 
-
-# make it later after realy have a chace to select
 
 def lock_sigleton_call(the_do_do):
     lock = threading.Lock()
@@ -61,9 +59,10 @@ def get_state_dir(suffix=''):
     return state_dir
 
 
-# TODO: consider chche/singleton decorator usage
-# NOTE: passwords should ne be parameter of command, if you see them as command
-#       parameter in the log is needs to be fixed __command__
+# TODO: consider cache/singleton decorator usage
+# NOTE: passwords should not be parameter of command, if you see them as command
+#       argument, it is needs to be fixed __command__
+#       export/stdin can be hidded and it is ok
 KEYMGR = None
 SELECTED_KEYMGR = None
 
@@ -74,10 +73,10 @@ def get_keymanager():
         return SELECTED_KEYMGR
     if is_receiver():
         node = inv.get_this_node()
-        SELECTED_KEYMGR = osinsutils.keymgrs.MemoryKeyMgr(data=node['keys'])
+        SELECTED_KEYMGR = speedling.keymgrs.MemoryKeyMgr(data=node['keys'])
     else:
         state_file = get_state_dir() + '/creds.json'
-        SELECTED_KEYMGR = osinsutils.keymgrs.JSONKeyMgr(datafile=state_file)
+        SELECTED_KEYMGR = speedling.keymgrs.JSONKeyMgr(datafile=state_file)
     return SELECTED_KEYMGR
 
 

@@ -1,6 +1,6 @@
 from speedling import facility
 from speedling import util
-from osinsutils import localsh
+from speedling import localsh
 import time
 
 import logging

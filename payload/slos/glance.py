@@ -4,7 +4,7 @@ from speedling import facility
 from speedling import tasks
 from speedling import gitutils
 
-from osinsutils import usrgrp
+from speedling import usrgrp
 
 import logging
 

@@ -5,8 +5,8 @@ from speedling import tasks
 import speedling
 from speedling import facility
 
-from osinsutils import localsh
-from osinsutils import usrgrp
+from speedling import localsh
+from speedling import usrgrp
 
 import logging
 

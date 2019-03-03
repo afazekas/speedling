@@ -3,8 +3,8 @@ from speedling import conf
 from speedling import facility
 from speedling import gitutils
 
-from osinsutils import localsh
-from osinsutils import fetch
+from speedling import localsh
+from speedling import fetch
 
 import logging
 

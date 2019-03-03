@@ -1,7 +1,7 @@
 from speedling import facility
 from speedling import util
 from speedling import conf
-from osinsutils import localsh
+from speedling import localsh
 import os
 import re
 import time

@@ -5,8 +5,8 @@ import inspect
 import logging
 from collections import abc
 from collections import defaultdict
-from osinsutils import cfgfile
-from osinsutils import localsh
+from speedling import cfgfile
+from speedling import localsh
 from speedling import util
 from speedling import conf
 from speedling import inv

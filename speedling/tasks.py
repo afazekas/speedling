@@ -1,7 +1,7 @@
 from speedling import inv
 from speedling import facility
-from osinsutils import localsh
-from osinsutils import cfgfile
+from speedling import localsh
+from speedling import cfgfile
 
 import logging
 
@@ -31,9 +31,11 @@ def task_hostname():
 
 
 # TODO: create variant for service dicts, witch component lookup
-def local_os_service_start_by_component(*args):
+def local_os_service_start_by_component(*args, update_cfg=False):
     to_start = []
     for comp in args:
+        if not update_cfg:
+            comp.have_content()
         enabled = comp.get_enabled_services_from_component()
         ds = comp.deploy_source
         for s in enabled:
@@ -50,3 +52,31 @@ def task_generic_system():
     # packages / selinux , # nodes individially can sync on sub parts
     # it may be just an indicator at the end
     inv.do_do(inv.ALL_NODES, facility.do_generic_system)
+
+
+# NOTE: changing sebools is sloow
+# NOTE: it is possible the httpd_use_openstack is unkown at this time
+# NOTE: we might consider setenforce 0 only when we are wating for bool changes
+# TODO: do not forget to reenable selinux
+# NOTE: At image creation time you can enable those by default
+def do_selinux():
+    localsh.run("""
+    setenforce 0 # please report the detected issues!
+    setsebool -P httpd_can_network_connect on
+    setsebool -P httpd_use_openstack on
+    setsebool -P haproxy_connect_any=1
+    """)
+
+
+def do_selinux_permissive():
+    localsh.run("""
+    setenforce 0 # please report the detected issues!""")
+    # persist ?
+
+
+# move to per node stuff
+def task_selinux():
+    #    facility.task_wants(speedling.tasks.task_pkg_install)
+    inv.do_do(inv.ALL_NODES, do_selinux_permissive)  # TODO: persistent config
+    return  # excluded
+    inv.so_do(inv.ALL_NODES, do_selinux)  # httpd nodes differs..

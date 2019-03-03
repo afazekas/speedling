@@ -1,6 +1,6 @@
 import threading
 import logging
-from osinsutils import localsh
+from speedling import localsh
 from speedling import facility
 from speedling import gitutils
 from speedling import inv

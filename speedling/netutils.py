@@ -1,4 +1,4 @@
-from osinsutils import localsh
+from speedling import localsh
 from collections import defaultdict
 
 

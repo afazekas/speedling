@@ -5,7 +5,7 @@ import grp  # getent groups
 import logging
 import numbers
 
-from osinsutils import localsh
+from speedling import localsh
 from hmac import compare_digest as compare_hash
 
 

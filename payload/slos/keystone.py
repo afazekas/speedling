@@ -4,10 +4,10 @@ import speedling
 from speedling import facility
 from speedling import gitutils
 
-from osinsutils import localsh
-from osinsutils import usrgrp
+from speedling import localsh
+from speedling import usrgrp
 
-import speedling.srv.common
+import speedling.tasks
 import logging
 
 LOG = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def task_keystone_fernet(self):
 
 
 def task_cfg_httpd(self):  # split it into its own componenet delegate wsgi
-    facility.task_wants(speedling.srv.common.task_selinux)
+    facility.task_wants(speedling.tasks.task_selinux)
     keystones = self.hosts_with_service('keystone')
     self.call_do(keystones, self.do_httpd_restart)
     self.wait_for_components(self.get_memcached())
@@ -94,7 +94,7 @@ class Keystone(facility.OpenStack):
     def do_keystone_endpoint_sync(cname, enp):
         self = facility.get_component(cname)
         from keystoneauth1.identity import v3
-        from osinsutils import ossync
+        import slos.ossync
         auth = v3.Password(auth_url='http://localhost:5000/v3', username='admin',
                            password=util.get_keymgr()(self.name, 'admin@default'), project_name='admin',
                            user_domain_name='Default',
@@ -103,12 +103,12 @@ class Keystone(facility.OpenStack):
         # TODO: wipe python client usage, looks like,
         # I cannot use the same token in all threads
         endpoint_override = 'http://localhost:5000/v3'
-        ossync.endpoint_sync(auth, enp, endpoint_override=endpoint_override)
+        slos.ossync.endpoint_sync(auth, enp, endpoint_override=endpoint_override)
 
     def do_keystone_user_sync(cname, dom):
         self = facility.get_component(cname)
         from keystoneauth1.identity import v3
-        from osinsutils import ossync
+        import slos.ossync
         auth = v3.Password(auth_url='http://localhost:5000/v3', username='admin',
                            password=util.get_keymgr()(self.name, 'admin@default'), project_name='admin',
                            user_domain_name='Default',
@@ -117,7 +117,7 @@ class Keystone(facility.OpenStack):
         # TODO: wipe python client usage, looks like,
         # I cannot use the same token in all threads
         endpoint_override = 'http://localhost:5000/v3'
-        ossync.user_dom_sync(auth, dom, endpoint_override=endpoint_override)
+        slos.ossync.user_dom_sync(auth, dom, endpoint_override=endpoint_override)
 
     def do_fernet_init(cname):
         self = facility.get_component(cname)

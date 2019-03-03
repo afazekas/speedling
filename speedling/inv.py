@@ -7,8 +7,8 @@ import logging
 from collections import abc
 from speedling import conf
 
-from osinsutils import netutils
-from osinsutils import localsh
+from speedling import netutils
+from speedling import localsh
 
 LOG = logging.getLogger(__name__)
 
