@@ -40,9 +40,9 @@ It requires root privileges to create bridges (libvirt) and virtual machines.
 
 .. code:: bash
 
-   ./virtbs.sh wipe 1 # deletes everything in slice1 (prefixed with bs1)
-   ./virtbs.sh cycle 1 controller:1 # recreate (destroy + build) one controller node
-   ./virtbs.sh cycle 1 controller:1,compute:1 # recreate (destroy + build) one controller and compute node
+   ./virtbs.sh --slice 1 wipe # deletes everything in slice1 (prefixed with bs1)
+   ./virtbs.sh --slice 1 cycle roles,fedora controller:1 # recreate (destroy + build) one controller node
+   ./virtbs.sh --slice 1 cycle roles,fedora controller:1,compute:1 # recreate (destroy + build) one controller and compute node
 
 
 slos
@@ -81,7 +81,7 @@ Basic flow with local vm creation:
     cd speedling
     ./prepare_host.sh  # only first time for installing dependencies
     ./test_aio.sh  # caretes virtual machine, uses sudo
-    ssh -F sshconf-bs1 f29-dev-02
+    ssh -F sshconf-bs1 controller-02
     source state/admin-openrc.sh
     openstack image list
     cd /opt/stack/tempest/

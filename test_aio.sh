@@ -4,7 +4,7 @@ set -x
 cd $(dirname "$(readlink -f "$0")")
 
 slice=1
-hostname=f29-dev-02
+hostname=controller-02
 
 ssh_conf="-F sshconf-bs$slice"
 ssh_cmd="ssh $ssh_conf  $hostname"
@@ -14,7 +14,7 @@ remote_userhost=stack
 my_cp=/tmp/my_cp
 mkdir -p "$my_cp"
 
-./virtbs.sh cycle $slice f29-dev:1
+./virtbs.sh cycle roles,fedora controller:1
 
 if [ $? != 0 ]; then
 	echo Provision Failed &>2

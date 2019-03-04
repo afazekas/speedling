@@ -159,8 +159,8 @@ def inv_extend(inventory, my_controller_services, my_worker_services):
                                             'services': my_controller_services,
                                             'extra_components': ['pythonopenstackclient', 'tempest', 'requirements']})
 
-    if 'compute' in hg:
-        for h in hg['compute']:
+    if 'worker' in hg:
+        for h in hg['worker']:
             var = hosts[h]
             inv.inventory_register_node(h, {'hostname': h,
                                             'networks': var.get('sl_networks', {}),

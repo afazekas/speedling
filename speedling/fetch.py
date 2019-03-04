@@ -5,7 +5,7 @@ LOG = logging.getLogger(__name__)
 
 
 def download_file(url, filename):
-    r = requests.get(url, stream=True)
+    r = requests.get(url, stream=True, allow_redirects=True)
     with open(filename, 'wb') as f:
         for chunk in r.iter_content(chunk_size=65536):
             if chunk:

@@ -14,7 +14,7 @@ remote_userhost=stack
 my_cp=/tmp/my_cp
 mkdir -p "$my_cp"
 
-./virtbs.sh cycle $slice controller:3,compute:3
+./virtbs.sh cycle roles,fedora controller:3,worker:3
 
 if [ $? != 0 ]; then
         echo Provision Failed &>2

@@ -53,7 +53,7 @@ class PKGMGR(object):
         """pkgs ise set of packages,
            if the package is str it will go trough mapping rules,
            in case of binary they are explicit"""
-        raise NotImplemented
+        raise NotImplementedError
 
     @classmethod
     def update(cls):

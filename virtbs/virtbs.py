@@ -4,6 +4,7 @@ import re
 import sys
 import os
 import os.path
+import yaml
 try:
     from shlex import quote as cmd_quote
 except ImportError:
@@ -14,12 +15,15 @@ from speedling import localsh
 from speedling import cfgfile
 from speedling import netutils
 from speedling import fetch
+from speedling import util
 
 import uuid
 import errno
 import pwd
 import grp
+import argparse
 
+import __main__
 
 try:
     import virtualbmc.manager as vbmc
@@ -635,10 +639,10 @@ def __filter_to_json(d):
 
 
 def image_virt_customize(name, data, key=None, renew=False):
-    # TODO: we do not really want to have _base_image_factory
+    # TODO: we do not really want to have _base_image
     # to convert to raw and move it to the _base and mage the gc more complex
-    location = base_image_factory(data['base_slot'],
-                                  data.get('base_version_key', None))
+    location = base_image(data['base_slot'],
+                          data.get('base_version_key', None))
     # TODO: same name uniquie magic
     # TODO: build lock
     # TODO: parallel safe build
@@ -657,12 +661,18 @@ def image_virt_customize(name, data, key=None, renew=False):
     build_image = os.path.join(img_dir, build_id)  # no suffix
     build_log = os.path.join(img_dir, build_id + '.log')
     create_backed_qcow2(location, build_image)  # TODO: add size parameter
-    script_file = data.get('script_file', None)
-    if not script_file:
-        script = data.get('script', '')
-        assert script  # TODO: raise a joke
-        script_file = os.path.join(img_dir, build_id + '-build.sh')
-        cfgfile.content_file(script_file, script)
+    script = None
+    script_desc = data.get('script', None)
+    if 'here' in script_desc:
+        script = script_desc['here']
+    if 'file' in script:
+        if script:
+            raise Exception('Declare only here or file not both')
+        script = open(script_desc['file']).read()
+
+    assert script  # TODO: raise a joke
+    script_file = os.path.join(img_dir, build_id + '-build.sh')
+    cfgfile.content_file(script_file, script)
     args = ""
     if key:
         args = '--key ' + key
@@ -677,100 +687,12 @@ def image_virt_customize(name, data, key=None, renew=False):
     return ('qcow2', build_image)
 
 
-f29_url_pattern = ('https://download.fedoraproject.org/pub/fedora/linux/'
-                   'releases/29'
-                   '/Cloud/x86_64/images/Fedora-Cloud-Base-29-{key}'
-                   '.x86_64.raw.xz')
-# 1.2
-f_s256 = ('d44dccfaa302dc25a0ca42ad442d4b1651aca486d8940238649062b72e8bf466')
-
-# mosh ?
-# TODO: add installonly_limit=1 to /etc/dnf/dnf.conf
-f29_my_script = """#!/bin/sh
-yum update -y
-yum install -y vim-enhanced strace etckeeper tcpdump
-etckeeper init
-git config --global user.email "you@example.com"
-git config --global user.name "local root"
-etckeeper commit -a -m 'First'
-"""
-
-devstack_f29_script = ("""#!/bin/bash
-set -x
-echo Resize step
-/usr/bin/growpart /dev/sda 1 || /usr/bin/growpart /dev/vda 1  # we need more than 4G images
-resize2fs /dev/sda1 || resize2fs /dev/vda1
-dnf copr enable @virtmaint-sig/virt-preview -y # Workaround https://bugzilla.redhat.com/show_bug.cgi?id=1672620
-yum update -y
-yum install -y python3-devel \
-python2-devel graphviz novnc \
-openldap-devel python3-mod_wsgi \
-httpd libverto-libev \
-libffi-devel libxslt-devel httpd mariadb-server-galera mariadb-devel \
-httpd-devel rabbitmq-server openssl-devel \
-python3-numpy python3-ldap python3-dateutil python3-psutil pyxattr xfsprogs liberasurecode-devel \
-python3-libguestfs cryptsetup libvirt-client \
-memcached \
-iptables haproxy ipset radvd openvswitch conntrack-tools \
-pcp-system-tools \
-python3-libguestfs \
-gcc-c++ \
-pcs pacemaker \
-rsync-daemon python2-keystonemiddleware python3-PyMySQL \
-ceph-mds ceph-mgr ceph-mon ceph-osd ceph-radosgw redis python3-redis python3-memcached \
-python3-libvirt python3-keystoneauth1 python3-keystoneclient python3-rbd \
-python2-subunit python2-jsonschema python2-paramiko
-mkdir /opt/stack
-cd /opt/stack
-#TODO parallel
-git clone "https://github.com/openstack/nova.git"
-git clone "https://github.com/openstack/neutron.git"
-git clone "https://github.com/openstack/glance.git"
-git clone "https://github.com/openstack/cinder.git"
-git clone "https://github.com/openstack/keystone.git"
-git clone "https://github.com/openstack/swift.git"
-git clone "https://github.com/openstack/tempest.git"
-git clone "https://github.com/openstack/requirements.git"
-
-pip3 install -c requirements/upper-constraints.txt -r nova/requirements.txt
-pip3 install -c requirements/upper-constraints.txt -r neutron/requirements.txt
-pip3 install -c requirements/upper-constraints.txt -r glance/requirements.txt
-pip3 install -c requirements/upper-constraints.txt -r cinder/requirements.txt
-pip3 install -c requirements/upper-constraints.txt -r keystone/requirements.txt
-pip install -c requirements/upper-constraints.txt -r swift/requirements.txt
-pip3 install -c requirements/upper-constraints.txt -r tempest/requirements.txt
-pip3 install -c requirements/upper-constraints.txt python-openstackclient
-(cd nova; pip3 install -e .)
-(cd neutron; pip3 install -e .)
-(cd glance; pip3 install -e .)
-(cd cinder; pip3 install -e .)
-(cd keystone; pip3 install -e .)
-(cd swift; pip install -e .)
-(cd tempest; pip3 install -e .)
-""")
-
-
 # NOTE: we might need to handle more version key kind values
-# TODO: to yaml
-image_flow_table = {'f29': {'driver': image_download,
-                            'url_pattern': f29_url_pattern,
-                            'version_key': '1.2',
-                            'sha256': f_s256,
-                            'compression': 'xz',
-                            'fmt': 'raw'},
-                    'f29-my': {'driver': image_virt_customize,
-                               'base_slot': 'f29',
-                               'script': f29_my_script},
-                    'f29-dev': {'driver': image_virt_customize,
-                                'base_slot': 'f29-my',
-                                'key_function': 'sha256',
-                                'script': devstack_f29_script},
-                    }
+image_flow_table = {}
 
 
-# key_function is used to transfer the user friendy keys to fs representable
 # default_alg: instead of version_key execute the named function
-def base_image_factory(image_type, version_key=None):
+def base_image(image_type, version_key=None):
     # reqursively does the build steps to reach a valid image
     (fmt, image) = image_flow_table[image_type]['driver'](
                                                 image_type,
@@ -1011,14 +933,14 @@ def process_request(build_slice, machine_types, request):
                 e_br = get_br_name(build_slice, net)
                 machine['extra_net_mac_brs'].append((e_mac, e_br))
             if 'base_image' not in machine:
-                if 'image_factory' in machine:
-                    image_type = machine['image_factory']
+                if 'image' in machine:
+                    image_type = machine['image']
                     vk = machine.get('version_key', None)
-                    machine['base_image'] = base_image_factory(image_type,
-                                                               version_key=vk)
+                    machine['base_image'] = base_image(image_type,
+                                                       version_key=vk)
                 elif not machine.get('blank', False):
                     raise Exception('Non balnk machine without base_image or '
-                                    'image_factory ')
+                                    'image ')
                 else:
                     machine['base_image'] = None
             if 'blank' not in machine:
@@ -1084,50 +1006,6 @@ def process_request(build_slice, machine_types, request):
     generate_ipmi_instack(unrolled, build_slice,
                           'instackenv-' + str(build_slice) + '.json')
     # TODO: create instack.json from the blank nodes,
-    # it might need different key file
-
-
-# TODO to yaml
-# TODO have more namespaces for defaults
-machine_types = {'controller': {'image_factory': 'f29-dev',
-                                'memory': 8192,
-                                'vcpu': 8,
-                                'extra_nets': ['data']},
-                 'compute': {'image_factory': 'f29-dev',
-                             'memory': 2048,
-                             'vcpu': 2,
-                             'extra_nets': ['data']},
-                 'f29': {'image_factory': 'f29',
-                         'memory': 8192,
-                         'vcpu': 8,
-                         'disk_size': '40G'},
-                 'f29-my': {'image_factory': 'f29-my',
-                            'memory': 8192,
-                            'vcpu': 8,
-                            'disk_size': '40G'},
-                 'f29-dev': {'image_factory': 'f29-dev',
-                             'memory': 8192,
-                             'vcpu': 8,
-                             'disk_size': '40G'},
-                 'ceph': {'image_factory': 'f29-dev',
-                          'memory': 2048,
-                          'vcpu': 2,
-                          'extra_nets': ['data', 'replicate'],
-                          'extra_disks': ['4G', '4G', '4G']},
-                 'swift': {'blank': False,
-                           'image_factory': 'f29-dev',
-                           'memory': 4096,
-                           'vcpu': 2,
-                           'extra_nets': ['data', 'replicate'],
-                           'extra_disks': ['4G', '4G', '4G']},
-                 'pxe_compute': {
-                          'blank': True,
-                          'memory': 4096,
-                          'vcpu': 2}}
-
-
-# request = OrderedDict((('controller', 3), ('compute', 2),
-#                       ('ceph', 4),  ('swift', 4), ('pxe_compute', 4)))
 
 
 # process_request(1,  machine_types, request)
@@ -1186,17 +1064,57 @@ def create_workspace():
 
 # virtbs renew provider
 # virtbs renew provider:key
+
+
+image_download.flow_exportd = True
+image_virt_customize.flow_exportd = True
+
+
+def gen_parser():
+    parser = argparse.ArgumentParser(
+                      description='Virt Build Slices the VM manager')
+    parser.add_argument('-s', '--slice',
+                        help='Receiver mode act on remote host',
+                        type=int,
+                        default=1)
+    parser.add_argument('-c', '--config',
+                        help='Receiver mode act on remote host',
+                        default="virtbs/config.yaml")
+    sps = parser.add_subparsers(help='sub-command help', dest='command', required=True)
+    sps.add_parser('wipe', help='Destroys the slice')
+    cycle_parser = sps.add_parser('cycle', help='Destroys the  slice, and creates a new one')
+    cycle_parser.add_argument('matrix', help="',' sperated list of machine matrxes from the config file")
+    cycle_parser.add_argument('topology', help=" machin_type:nr_instances, ..")
+    return parser
+
+
 def main():
-    l = len(sys.argv)
-    if (l < 3):
-        print('help: read the code, and create here help and a normal interface')
+    global image_flow_table
+    global machine_types
+    parser = gen_parser()
+    args = parser.parse_args(sys.argv[1:])
+    config = yaml.load(open(args.config))
+    image_flow_table = config['image_flow']
+
+    for rec, val in image_flow_table.items():
+        driver = getattr(__main__, val['driver'])
+        if not hasattr(driver, 'flow_exportd'):
+            raise Exception('The driver ({}) not labled with '
+                            ' "flow_exportd"'.format(val['driver']))
+        val['driver'] = driver
+
     create_workspace()
-    build_slice = int(sys.argv[2])
-    if sys.argv[1] == 'wipe':
+    build_slice = args.slice
+    if args.command == 'wipe':
         wipe_slice(build_slice)
-    elif sys.argv[1] == 'cycle':
+    elif args.command == 'cycle':
+        to_mul = args.matrix.split(',')
+        machine_types = config['machine_matrix'][to_mul[0]]
+        for mul in to_mul[1:]:
+            util.dict_merge(machine_types, config['machine_matrix'][mul])
+
         request = OrderedDict((a, int(b)) for (a, b)
-                              in (l.split(':') for l in sys.argv[3].split(',')))
+                              in (l.split(':') for l in args.topology.split(',')))
         process_request(build_slice,  machine_types, request)
 
 

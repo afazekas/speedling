@@ -1,0 +1,148 @@
+image_flow:
+    f29:
+        driver: image_download
+        url_pattern: https://download.fedoraproject.org/pub/fedora/linux/releases/29//Cloud/x86_64/images/Fedora-Cloud-Base-29-{key}.x86_64.raw.xz
+        version_key: '1.2'
+        sha256: 'd44dccfaa302dc25a0ca42ad442d4b1651aca486d8940238649062b72e8bf466'
+        compression: xz
+        fmt: raw
+    ubuntu-18.10:
+        driver: image_download
+        url_pattern: https://cloud-images.ubuntu.com/cosmic/{key}/cosmic-server-cloudimg-amd64.img
+        version_key: '20190301'
+        sha256: '687361c7913cbf27f6245857491cbbd348bbdf3f0ca96cd84d20efd5413c7021'
+        fmt: qcow2
+    opensuse-15.0:
+        driver: image_download
+        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-{key}.qcow2
+        version_key: '0.0.4-Buildlp150.12.122'
+        sha256: 'eb61ef97bf6232d402ee15c5d8015505b223074f6748aae7eada54140c7f1203'
+        fmt: qcow2
+    f29-my:
+        driver: image_virt_customize
+        base_slot: f29
+        script:
+           file: virtbs/bscript/my.sh
+    ubi-my:
+        driver: image_virt_customize
+        base_slot: ubuntu-18.10
+        script:
+           file: virtbs/bscript/my.sh
+    suse-my:
+        driver: image_virt_customize
+        base_slot: opensuse-15.0
+        script:
+           file: virtbs/bscript/my.sh
+    f29-my-pkg:
+        driver: image_virt_customize
+        base_slot: f29-my
+        script:
+           file: virtbs/bscript/f29_os_basepkg.sh
+    ubi-my-pkg:
+        driver: image_virt_customize
+        base_slot: ubi-my
+        script:
+           file: virtbs/bscript/ubuntu_os_basepkg.sh
+    suse-my-pkg:
+        driver: image_virt_customize
+        base_slot: suse-my
+        script:
+           file: virtbs/bscript/opensuse_os_basepkg.sh
+    f29-dev:
+        driver: image_virt_customize
+        base_slot: f29-my-pkg
+        script:
+            file: virtbs/bscript/os-pipgit.sh
+    ubi-dev:
+        driver: image_virt_customize
+        base_slot: ubi-my-pkg
+        script:
+            file: virtbs/bscript/os-pipgit.sh
+    suse-dev:
+        driver: image_virt_customize
+        base_slot: ubi-my-pkg
+        script:
+            file: virtbs/bscript/os-pipgit.sh
+
+machine_matrix:
+    roles:
+        # default gate size (but no swap)
+        controller:
+            memory: 8192
+            vcpu: 8
+            extra_nets: ['data']
+        # small worker
+        worker:
+            memory: 2048
+            vcpu: 2
+            extra_nets: ['data']
+        # cloud image as is
+        plain:
+            memory: 8192
+            vcpu: 8
+            disk_size: '40G'
+        # cloud image with basic tools
+        minim:
+            memory: 8192
+            vcpu: 8
+            disk_size: '40G'
+        # image before getting source pypi packages
+        osbase:
+            memory: 8192
+            vcpu: 8
+            disk_size: '40G'
+        # multi disk node for swift/ceph
+        disk:
+            blank: False
+            memory: 4096
+            vcpu: 2
+            extra_nets: ['data', 'replicate']
+            extra_disks: ['4G', '4G', '4G']
+        # machine needs to be network booted
+        pxe_compute:
+            blank: True
+            memory: 4096
+            vcpu: 2
+        # TODO: support for node group connected net appliances
+
+    fedora:
+        controller:
+            image: f29-dev
+        worker:
+            image: f29-dev
+        plain:
+            image: f29
+        minim:
+            image: f29-my
+        osbase:
+            image: f29-my-pkg
+        disk:
+            image: f29-dev
+
+    ubuntu:
+        controller:
+            image: ubi-dev
+        worker:
+            image: ubi-dev
+        plain:
+            image: ubi
+        minim:
+            image: ubi-my
+        osbase:
+            image: ubi-my-pkg
+        disk:
+            image: ubi-dev
+
+    opensuse:
+        controller:
+            image: suse-dev
+        worker:
+            image: suse-dev
+        plain:
+            image: suse
+        minim:
+            image: suse-my
+        osbase:
+            image: suse-my-pkg
+        disk:
+            image: suse-dev
