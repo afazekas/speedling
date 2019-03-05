@@ -371,8 +371,9 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
     def get_node_packages(self):
         pkgs = super(Neutron, self).get_node_packages()
         pkgs.update({'acl', 'dnsmasq', 'dnsmasq-utils', 'ebtables', 'haproxy',
-                     'iptables', 'iputils', 'mysql-devel', 'radvd', 'sqlite',
-                     'sudo', 'conntrack-tools', 'keepalived', 'ipset', 'openvswitch'})
+                     'iptables', 'util-cli\\iputils', 'lib-dev\\mariadb', 'radvd', 'sqlite',
+                     'sudo', 'lib-py2\\keystonemiddleware', 'keepalived',
+                     'ipset', 'srv-ovs\\switch'})
         # move ovs to ovs
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-neutron'})

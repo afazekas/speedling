@@ -168,7 +168,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
 
     def get_node_packages(self):
         pkgs = super(MariaDB, self).get_node_packages()
-        pkgs.update({'mariadb-server-galera'})
+        pkgs.update({'srv-sql\\mariadb-galera'})
         return pkgs
 
     def do_mariadb(cname):

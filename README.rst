@@ -42,7 +42,7 @@ It requires root privileges to create bridges (libvirt) and virtual machines.
 
    ./virtbs.sh --slice 1 wipe # deletes everything in slice1 (prefixed with bs1)
    ./virtbs.sh --slice 1 cycle roles,fedora controller:1 # recreate (destroy + build) one controller node
-   ./virtbs.sh --slice 1 cycle roles,fedora controller:1,compute:1 # recreate (destroy + build) one controller and compute node
+   ./virtbs.sh --slice 1 cycle roles,fedora controller:1,worker:1 # recreate (destroy + build) one controller and compute node
 
 
 slos

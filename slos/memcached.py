@@ -29,5 +29,5 @@ class Memcached(facility.Component):
 
     def get_node_packages(self):
         pkgs = super(Memcached, self).get_node_packages()
-        pkgs.update({'memcached', 'python3-memcached'})
+        pkgs.update({'memcached'})
         return pkgs

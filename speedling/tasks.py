@@ -70,7 +70,8 @@ def do_selinux():
 
 def do_selinux_permissive():
     localsh.run("""
-    setenforce 0 # please report the detected issues!""")
+    setenforce 0 || true  # please report the detected issues!""")
+    # true is a temporary hack for non selinux user distros
     # persist ?
 
 

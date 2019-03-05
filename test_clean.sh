@@ -3,7 +3,7 @@
 set -x
 
 slice=1
-hostname=f29-02
+hostname=plain-02
 
 ssh_conf="-F sshconf-bs$slice"
 ssh_cmd="ssh $ssh_conf  $hostname"
@@ -13,7 +13,7 @@ remote_userhost=stack
 my_cp=/tmp/my_cp
 mkdir -p "$my_cp"
 
-sudo ./virtbs.sh cycle $slice f29:1
+sudo ./virtbs.sh cycle roles,fedora  plain:1
 
 if [ $? != 0 ]; then
 	echo Provision Failed &>2

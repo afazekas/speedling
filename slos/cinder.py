@@ -137,8 +137,7 @@ cinder ALL = (root) NOPASSWD: /usr/bin/cinder-rootwrap /etc/cinder/rootwrap.conf
 
     def get_node_packages(self):
         pkgs = super(Cinder, self).get_node_packages()
-        pkgs.update({'iscsi-initiator-utils', 'lvm2', 'qemu-img',
-                    'scsi-target-utils', 'targetcli'})
+        pkgs.update({'lvm2', 'util-cli\\qemu-img'})
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-cinder'})
         return pkgs

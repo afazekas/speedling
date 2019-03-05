@@ -34,8 +34,8 @@ class Libvirt(facility.VirtDriver):
 
     def get_node_packages(self):
         pkgs = super(Libvirt, self).get_node_packages()
-        pkgs.update({'python3-libguestfs', 'libvirt',
-                     'libvirt-client', 'python3-libvirt'})
+        pkgs.update({'lib-py3\\libguestfs', 'libvirt',
+                     'util-cli\\libvirt', 'lib-py3\\libvirt'})
         return pkgs
 
     def do_libvirt(cname):
@@ -298,10 +298,11 @@ filters_path=/etc/nova/migration/rootwrap.d
 
     def get_node_packages(self):
         pkgs = super(Nova, self).get_node_packages()
-        pkgs.update({'conntrack-tools', 'curl', 'dnsmasq-utils', 'ebtables', 'gawk',
-                     'genisoimage', 'iptables', 'iputils', 'kernel-modules', 'kpartx',
-                     'm2crypto', 'mysql-devel', 'numpy', 'parted',
-                     'polkit', 'sqlite', 'sudo'})
+        pkgs.update({'curl', 'dnsmasq-utils', 'ebtables', 'gawk',
+                     'genisoimage', 'iptables',
+                     'kpartx', 'util-cli\\iputils',
+                     'm2crypto', 'lib-dev\\mariadb', 'python3-numpy', 'parted',
+                     'sqlite', 'sudo'})
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-nova'})
         return pkgs

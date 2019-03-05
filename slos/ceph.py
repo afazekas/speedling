@@ -390,7 +390,8 @@ EOF
 
     def get_node_packages(self):
         pkgs = super(Ceph, self).get_node_packages()
-        pkgs.update({'ceph-mds', 'ceph-mgr', 'ceph-mon', 'ceph-osd', 'ceph-radosgw'})
+        pkgs.update({'ceph-mds', 'ceph-mgr', 'ceph-mon',
+                     'ceph-osd', 'srv-radosgw\\ceph'})
         return pkgs
 
     def get_glance_conf_extend(self, sname):

@@ -211,7 +211,8 @@ Listen 35357
         pkgs = super(Keystone, self).get_node_packages()
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-keystone'})
-        pkgs.update({'httpd', 'openldap-devel', 'python3-mod_wsgi',
+        pkgs.update({'srv-http\\apache-httpd', 'lib-dev\\openldap',
+                     'lib-http-py3\\mod_wsgi', 'lib-py3\\pymemcached',
                      'python3-keystoneauth1', 'python3-keystoneclient'})
         # until the httpd does not gets it's own module
         return pkgs

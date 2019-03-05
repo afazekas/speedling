@@ -665,7 +665,7 @@ def image_virt_customize(name, data, key=None, renew=False):
     script_desc = data.get('script', None)
     if 'here' in script_desc:
         script = script_desc['here']
-    if 'file' in script:
+    if 'file' in script_desc:
         if script:
             raise Exception('Declare only here or file not both')
         script = open(script_desc['file']).read()

@@ -173,8 +173,7 @@ class Tempest(facility.OpenStack):
 
     def get_node_packages(self):
         pkgs = super(Tempest, self).get_node_packages()
-        pkgs.update({'python2-subunit', 'python2-jsonschema', 'python2-paramiko',
-                     'libffi-devel', 'openssl-devel', 'libxslt-devel'})
+        pkgs.update({'lib-py2\\subunit', 'python2-jsonschema', 'lib-py2\\paramiko'})
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-tempest'})
         return pkgs

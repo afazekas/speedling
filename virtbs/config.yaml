@@ -15,8 +15,8 @@ image_flow:
     opensuse-15.0:
         driver: image_download
         url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-{key}.qcow2
-        version_key: '0.0.4-Buildlp150.12.122'
-        sha256: 'eb61ef97bf6232d402ee15c5d8015505b223074f6748aae7eada54140c7f1203'
+        version_key: '0.0.4-Buildlp150.12.123'
+        sha256: '426f545bc7fe3518bfe4dae8d6cecb470ac3f306c03a5178824181f29a390981'
         fmt: qcow2
     f29-my:
         driver: image_virt_customize
@@ -60,7 +60,7 @@ image_flow:
             file: virtbs/bscript/os-pipgit.sh
     suse-dev:
         driver: image_virt_customize
-        base_slot: ubi-my-pkg
+        base_slot: suse-my-pkg
         script:
             file: virtbs/bscript/os-pipgit.sh
 
@@ -125,7 +125,7 @@ machine_matrix:
         worker:
             image: ubi-dev
         plain:
-            image: ubi
+            image: ubuntu-18.10
         minim:
             image: ubi-my
         osbase:
@@ -139,7 +139,7 @@ machine_matrix:
         worker:
             image: suse-dev
         plain:
-            image: suse
+            image: opensuse-15.0
         minim:
             image: suse-my
         osbase:

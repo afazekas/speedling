@@ -335,12 +335,13 @@ class OpenStack(Component):
     def get_node_packages(self):
         pkgs = super(OpenStack, self).get_node_packages()
         if self.deploy_source == 'src':
-            pyy = 'python' + str(self.python_version)
-            pypkg = pyy + '-devel'
-            pippkg = pyy + '-pip'
-            pkgs.update({pippkg, 'git', pypkg, 'gcc-c++',
-                         'libffi-devel', 'libxslt-devel', 'openssl-devel',
-                         'python3-PyMySQL'})
+            pypkg = 'lib-dev\\python' + str(self.python_version)
+            pippkg = 'python3-pip'
+            if self.python_version == 2:
+                pippkg = 'cli-py2\\pip'
+            pkgs.update({pippkg, 'git', pypkg, 'util-cli\\gcc-g++',
+                         'lib-dev\\ffi', 'lib-dev\\xslt', 'lib-dev\\openssl',
+                         'lib-py3\\pymysql'})
         return pkgs
 
     # overrides

@@ -194,7 +194,7 @@ def create_inventory_and_glb():
                               'cinder-scheduler', 'cinder-volume', 'ceph-osd',
                               'ceph-mgr', 'ceph-mon',  'nova-placement-api', 'swift-object',
                               'swift-container', 'swift-account', 'swift-proxy',
-                              'neutron-meter-agent', 'swift-container-sync',
+                              'neutron-metering-agent', 'swift-container-sync',
                               'neutron-openvswitch-agent', 'openvswitch', 'neutron-metering-agent'}
     my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'openvswitch', 'libvirtd'}
 

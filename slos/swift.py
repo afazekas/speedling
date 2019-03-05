@@ -262,8 +262,8 @@ done
 
     def get_node_packages(self):
         pkgs = super(Swift, self).get_node_packages()
-        pkgs.update({'curl', 'liberasurecode-devel', 'memcached', 'pyxattr',
-                    'rsync-daemon', 'sqlite', 'xfsprogs', 'python2-keystonemiddleware'})
+        pkgs.update({'curl', 'lib-dev\\erasurecode', 'memcached', 'lib-py3\\pyxattr',
+                    'srv-rsync\\rsyncd', 'sqlite', 'xfsprogs', 'lib-py2\\keystonemiddleware'})
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-swift'})
         return pkgs
