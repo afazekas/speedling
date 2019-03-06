@@ -2,6 +2,7 @@ import threading
 import logging
 from speedling import localsh
 from speedling import conf
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 PKG_COMPOSOTION = set()
@@ -26,7 +27,7 @@ PKG_MAPPING = {'srv-http\\apache-httpd': {'redhat': {'\\default': ['httpd'],
                'srv-sql\\mariadb-galera': {'debian': {'\\default': ['galera-3', 'mariadb-server']},
                                            'suse': {'\\default': ['mariadb-galera', 'mariadb-server']},
                                            'redhat': {'\\default': ['mariadb-server-galera']}},
-               'srv-ldap\\openldap': {'debian': {'\\default': ['libldap2-dev']},
+               'srv-ldap\\openldap': {'debian': {'\\default': ['slapd']},
                                       'suse': {'\\default': ['openldap2']},
                                       'redhat': {'\\default': ['openldap']}},
                'dev-http\\apache-httpd': {'redhat': {'\\default': ['httpd-devel']},
@@ -41,7 +42,7 @@ PKG_MAPPING = {'srv-http\\apache-httpd': {'redhat': {'\\default': ['httpd'],
                                  '\\default': ['libxslt-devel']},
                'lib-dev\\ffi': {'debian': {'\\default': ['libffi-dev']},
                                 '\\default': ['libffi-devel']},
-               'lib-dev\\mariadb': {'debian': {'\\default': ['mariadb-dev']},
+               'lib-dev\\mariadb': {'debian': {'\\default': ['libmariadb-dev']},
                                     'suse': {'\\default': ['libmariadb-devel']},
                                     'redhat': {'\\default': ['mariadb-devel']}},
                'lib-dev\\openssl': {'debian': {'\\default': ['libssl-dev']},
@@ -54,13 +55,13 @@ PKG_MAPPING = {'srv-http\\apache-httpd': {'redhat': {'\\default': ['httpd'],
                                      '\\default': ['rsync']},
                'lib-dev\\openldap': {'redhat': {'\\default': ['openldap-devel']},
                                      'suse': {'\\default': ['openldap2-devel']},
-                                     'debian': {'\\default': ['ldap-dev']}},
+                                     'debian': {'\\default': ['libldap2-dev']}},
                'lib-http-py3\\mod_wsgi': {'redhat': {'\\default': ['python3-mod_wsgi']},
                                           'suse': {'\\default': ['apache2-mod-wsgi-py3']},
                                           'debian': {'\\default': ['libapache2-mod-wsgi-py3']}},
                'lib-py3\\pymemcached': {'redhat': {'\\default': ['python3-memcached']},
                                         'suse': {'\\default': ['python3-python-memcached']},
-                                        'debian': {'\\default': ['python3-pymemcache']}},
+                                        'debian': {'\\default': ['python3-memcache']}},
                'lib-py2\\subunit': {'redhat': {'\\default': ['python2-subunit']},
                                     '\\default': ['python-subunit']},
                'lib-py2\\jsonschema': {'redhat': {'\\default': ['python2-jsonschema']},
@@ -76,15 +77,18 @@ PKG_MAPPING = {'srv-http\\apache-httpd': {'redhat': {'\\default': ['httpd'],
                                  '\\default': ['pcs']},
                'lib-py3\\libvirt': {'suse': {'\\default': ['python3-libvirt-python']},
                                     '\\default': ['python3-libvirt']},
-               'util-cli\\gcc-g++': {'debian': {'\\default': ['g++']},
-                                     '\\default': ['gcc-c++']},
+               'util-lang\\gcc-g++': {'debian': {'\\default': ['g++']},
+                                      '\\default': ['gcc-c++']},
                'lib-py3\\libgusetfs': {'debian': {'\\default': ['python3-guestfs']},
                                        '\\default': ['python3-libguestfs']},
                'util-cli\\libvirt': {'debian': {'\\default': ['libvirt-clients']},
                                      '\\default': ['libvirt-client']},
+               'srv-virt\\libvirt': {'debian': {'\\default': ['libvirt-daemon-system']},
+                                     '\\default': ['libvirt']},
                'util-cli\\conntrack': {'debian': {'\\default': ['conntrack']},
-                                       '\\default': ['conntrack-tools']},
-               'util-cli\\qemu-img': {'debian': {'\\default': ['qemu-tools']},
+                                       'suse': {'\\default': ['libvirt-daemon']},
+                                       '\\default': ['libvirt']},
+               'util-cli\\qemu-img': {'debian': {'\\default': ['qemu']},
                                       '\\default': ['qemu-img']},
                'util-cli\\iputils': {'debian': {'\\default': ['iputils-arping', 'iputils-ping']},
                                      '\\default': ['iputils']},
@@ -115,6 +119,8 @@ def lookup_pkg(distro, sub_dict):
 
 def pkg_mapping(pkgs, distro):
     # just for the map dict usage, other rules in the classes
+    # distro must be an ordered dict
+    distro = list(distro.values())
     pkg_real_list = []
     for pkg in pkgs:
         if '\\' in pkg:
@@ -127,11 +133,10 @@ def pkg_mapping(pkgs, distro):
     return set(pkg_real_list)
 
 
-DISTRO = None
 PKG_MGR_STR = None
 
 
-def _detect_pkg_mgr():
+def detect_pkg_mgr():
     global PKG_MGR_STR
     if PKG_MGR_STR is not None:
         return PKG_MGR_STR
@@ -154,7 +159,7 @@ def get_pkgmgr():
     global PKG_MANAGER
     if PKG_MANAGER is not None:
         return PKG_MANAGER
-    pkg_mgr = _detect_pkg_mgr()
+    pkg_mgr = detect_pkg_mgr()
     gconf = conf.get_global_config()
     if not gconf.get('use_pkg', True):
         PKG_MANAGER = NULL
@@ -169,24 +174,6 @@ def get_pkgmgr():
     return PKG_MANAGER
 
 
-def detect_distro():
-    # dummy logic, just for 3 supported distro is good enough,
-    # but later we will need to sue lsb_release and some fallbacks
-    global DISTRO
-    if DISTRO:
-        return DISTRO
-    pkg_mgr = _detect_pkg_mgr()
-    if 'dnf' == pkg_mgr:
-        DISTRO = ['redhat', 'fedora', '29']
-    elif 'apt-get' == pkg_mgr:
-        DISTRO = ['debian', 'ubuntu', '18.10']
-    elif 'zypper' == pkg_mgr:
-        DISTRO = ['suse', 'opensuse', '15.0']
-    else:
-        raise Exception('Unable to figure out the Linux distribution')
-    return DISTRO
-
-
 # NOTE: we have pkg manager classes instead of distros , becuse
 #       too high number of distros exists, but pkg mgrs are limited
 #       this model leads to less code
@@ -197,7 +184,7 @@ class PKGMGR(object):
     @classmethod
     def pkg_mapping(cls, pkgs, distro=None):
         if distro is None:
-            distro = detect_distro()
+            distro = util.get_distro()
         return pkg_mapping(pkgs, distro)
 
     @classmethod
@@ -244,7 +231,7 @@ class DNF(PKGMGR):
 
 
 class Zypper(PKGMGR):
-    install_cmd = 'zypper --non-interactive install '
+    install_cmd = 'zypper --non-interactive install --auto-agree-with-licenses --no-recommends '
     update_cmd = 'zypper --non-interactive update '
 
 

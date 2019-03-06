@@ -150,7 +150,7 @@ class Swift(facility.OpenStack, facility.StorageBackend):
     def etccfg_content(self):
         super(Swift, self).etccfg_content()
         usrgrp.group('swift', 160)
-        usrgrp.user('swift', 160)
+        usrgrp.user('swift', 'swift')
         self.ensure_path_exists('/etc/swift',
                                 owner='swift', group='swift')
 

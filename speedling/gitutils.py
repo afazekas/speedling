@@ -58,8 +58,8 @@ def ensure_git():
         ENSURE_GIT_LOCK.acquire()
         if SYSTEM_HAS_GIT:
             return
-        localsh.test("git --version")
-        pkgutils.get_pkgmgr().install({'git'})
+        if not localsh.test("git --version"):
+            pkgutils.get_pkgmgr().install({'git'})
         localsh.run("git --version")
         SYSTEM_HAS_GIT = True
     finally:

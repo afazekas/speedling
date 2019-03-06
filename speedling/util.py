@@ -1,13 +1,14 @@
-import speedling.keymgrs
-from speedling import cfgfile
-
+import collections
 from collections import abc
-from speedling import conf
-from speedling import inv
-
 import os
 import random
 import threading
+
+import speedling.keymgrs
+from speedling import cfgfile
+from speedling import pkgutils
+from speedling import conf
+from speedling import inv
 
 
 try:
@@ -175,3 +176,30 @@ def bless_with_principal(nodes, prlist):
         else:
             creds[s][p] = pas
     bless_with_creads(nodes, creds)
+
+
+DISTRO = collections.OrderedDict()
+
+
+def get_distro():
+    # dummy logic, just for 3 supported distro is good enough,
+    # but later we will need to sue lsb_release and some fallbacks
+    global DISTRO
+    if DISTRO:
+        return DISTRO
+    pkg_mgr = pkgutils.detect_pkg_mgr()
+    if 'dnf' == pkg_mgr:
+        DISTRO['family'] = 'redhat'
+        DISTRO['variant'] = 'fedora'
+        DISTRO['version'] = '29'
+    elif 'apt-get' == pkg_mgr:
+        DISTRO['family'] = 'debian'
+        DISTRO['variant'] = 'ubuntu'
+        DISTRO['version'] = '18.10'
+    elif 'zypper' == pkg_mgr:
+        DISTRO['family'] = 'suse'
+        DISTRO['variant'] = 'opensuse'
+        DISTRO['version'] = '15.0'
+    else:
+        raise Exception('Unable to figure out the Linux distribution')
+    return DISTRO

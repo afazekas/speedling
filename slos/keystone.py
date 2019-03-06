@@ -1,13 +1,11 @@
 from speedling import util
 from speedling import conf
-import speedling
 from speedling import facility
 from speedling import gitutils
-
 from speedling import localsh
 from speedling import usrgrp
-
 import speedling.tasks
+
 import logging
 
 LOG = logging.getLogger(__name__)
@@ -142,6 +140,8 @@ class Keystone(facility.OpenStack):
             }
 
     def etc_httpd_conf_d_wsgi_keystone_conf(self):
+        srv_name = 'httpd' if util.get_distro()['family'] == 'redhat' else 'apache2'
+        log_dir = '/var/log/' + srv_name
         return """Listen 5000
 Listen 35357
 
@@ -154,8 +154,8 @@ Listen 35357
     <IfVersion >= 2.4>
       ErrorLogFormat "%{{cu}}t %M"
     </IfVersion>
-    ErrorLog /var/log/httpd/keystone-error.log
-    CustomLog /var/log/httpd/keystone-access.log combined
+    ErrorLog {log_dir}/keystone-error.log
+    CustomLog {log_dir}/keystone-access.log combined
 
     <Directory {bin_dir}>
         <IfVersion >= 2.4>
@@ -177,8 +177,8 @@ Listen 35357
     <IfVersion >= 2.4>
       ErrorLogFormat "%{{cu}}t %M"
     </IfVersion>
-    ErrorLog /var/log/httpd/keystone-error.log
-    CustomLog /var/log/httpd/keystone-access.log combined
+    ErrorLog {log_dir}/keystone-error.log
+    CustomLog {log_dir}/keystone-access.log combined
 
     <Directory {bin_dir}>
         <IfVersion >= 2.4>
@@ -190,20 +190,29 @@ Listen 35357
         </IfVersion>
     </Directory>
 </VirtualHost>
-""".format(bin_dir='/usr/local/bin')
+""".format(bin_dir='/usr/local/bin', log_dir=log_dir)
 
     def etccfg_content(self):
         super(Keystone, self).etccfg_content()
         keystone_git_dir = gitutils.component_git_dir(self)
         usrgrp.group('keystone', 163)
-        usrgrp.user('keystone', 163, home=keystone_git_dir)
+        usrgrp.user('keystone', 'keystone', home=keystone_git_dir)
         self.ensure_path_exists('/etc/keystone',
                                 owner='keystone', group='keystone')
         self.ini_file_sync('/etc/keystone/keystone.conf',
                            self.etc_keystone_keystone_conf(),
                            owner='keystone', group='keystone')
+        distro = util.get_distro()['family']
 
-        self.content_file('/etc/httpd/conf.d/wsgi-keystone.conf',
+        if distro == 'debian':
+            # switch to simlink
+            cfg_dir = '/etc/apache2/sites-enabled'
+        elif distro == 'suse':
+            cfg_dir = '/etc/apache2/conf.d'
+        else:  # redhat familiy and this is expected in more distros
+            cfg_dir = '/etc/httpd/conf.d'
+
+        self.content_file(cfg_dir + '/wsgi-keystone.conf',
                           self.etc_httpd_conf_d_wsgi_keystone_conf(),
                           mode=0o644)
 
@@ -220,7 +229,8 @@ Listen 35357
     def do_httpd_restart(cname):
         self = facility.get_component(cname)
         self.have_content()
-        localsh.run("systemctl reload-or-restart httpd")
+        srv_name = 'httpd' if util.get_distro()['family'] == 'redhat' else 'apache2'
+        localsh.run("systemctl reload-or-restart " + srv_name)
     # TODO: httpd needs ot be moved and spacially ahndled (consider multiple instances)
 
     def do_fetch_fernet_as_tar(cname):

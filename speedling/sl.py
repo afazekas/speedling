@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import logging
+
 from speedling import receiver
 from speedling import control
 from speedling import inv
@@ -9,6 +11,8 @@ from speedling import conf
 
 
 UNIT_PREFIX = 'sl-'
+LOG = logging.getLogger(__name__)
+
 
 # speedling currently respected invetory arguments
 # ssh_address: used in the ssh connction string as hosts (prefering ips)
@@ -41,7 +45,13 @@ def main(create_inventory_and_glb, use_globals,
     inv.set_identity()
     goals = facility.get_goals()
     facility.start_pending()
-    facility.task_wants(*goals)
+    try:
+        facility.task_wants(*goals)
+    except:
+        LOG.info('Looks Bad: ' + ', '.join(f.__name__ for f in facility.FAILED))
+        raise
+    else:
+        LOG.info('Seams ok..')
 
 
 # it become a library

@@ -339,7 +339,7 @@ class OpenStack(Component):
             pippkg = 'python3-pip'
             if self.python_version == 2:
                 pippkg = 'cli-py2\\pip'
-            pkgs.update({pippkg, 'git', pypkg, 'util-cli\\gcc-g++',
+            pkgs.update({pippkg, 'git', pypkg, 'util-lang\\gcc-g++',
                          'lib-dev\\ffi', 'lib-dev\\xslt', 'lib-dev\\openssl',
                          'lib-py3\\pymysql'})
         return pkgs
@@ -513,6 +513,9 @@ def task_add_wants(task, *wants):
         task.wants = wants
 
 
+FAILED = []
+
+
 def _taskify(*args):
     task_sync_mutex.acquire()
     for task in args:
@@ -529,13 +532,16 @@ def _taskify(*args):
                             task_wants(*t.wants, caller_name=t.__name__)
                         t()
                     except:
+                        FAILED.append(t)
                         t.failed = True
                         LOG.error(t.__name__ + ' failed in ' + str(time.time() - start) + 's (waits included)')
                         raise
-                    LOG.info(t.__name__ + ' finished in ' + str(time.time() - start) + 's (waits included)')
-                    task_sync_mutex.acquire()
-                    pending.remove(t)
-                    task_sync_mutex.release()
+                    else:
+                        LOG.info(t.__name__ + ' finished in ' + str(time.time() - start) + 's (waits included)')
+                    finally:
+                        task_sync_mutex.acquire()
+                        pending.remove(t)
+                        task_sync_mutex.release()
                 return _finish_log
 
             task.thr = threading.Thread(target=helper_func())

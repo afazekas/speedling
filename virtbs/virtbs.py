@@ -1080,7 +1080,8 @@ def gen_parser():
     parser.add_argument('-c', '--config',
                         help='Receiver mode act on remote host',
                         default="virtbs/config.yaml")
-    sps = parser.add_subparsers(help='sub-command help', dest='command', required=True)
+    # required=True not in py3.6
+    sps = parser.add_subparsers(help='sub-command help', dest='command')
     sps.add_parser('wipe', help='Destroys the slice')
     cycle_parser = sps.add_parser('cycle', help='Destroys the  slice, and creates a new one')
     cycle_parser.add_argument('matrix', help="',' sperated list of machine matrxes from the config file")
@@ -1116,6 +1117,8 @@ def main():
         request = OrderedDict((a, int(b)) for (a, b)
                               in (l.split(':') for l in args.topology.split(',')))
         process_request(build_slice,  machine_types, request)
+    else:
+        raise Exception('Valid commands are: wipe, cycle')
 
 
 if __name__ == '__main__':

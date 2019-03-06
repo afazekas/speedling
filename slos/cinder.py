@@ -80,7 +80,7 @@ class Cinder(facility.OpenStack):
         super(Cinder, self).etccfg_content()
         c_srv = set(self.services.keys())
         usrgrp.group('cinder', 165)
-        usrgrp.user('cinder', 165)
+        usrgrp.user('cinder', 'cinder')
         util.base_service_dirs('cinder')
         comp = self
         self.ensure_path_exists('/var/lib/cinder/lock',

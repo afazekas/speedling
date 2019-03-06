@@ -86,7 +86,7 @@ class Glance(facility.OpenStack):
         super(Glance, self).etccfg_content()
         services = self.filter_node_enabled_services(g_srv)
         usrgrp.group('glance', 161)
-        usrgrp.user('glance', 161)
+        usrgrp.user('glance', 'glance')
         util.base_service_dirs('glance')
         self.ensure_path_exists('/var/lib/glance/images',
                                 owner='glance', group='glance')

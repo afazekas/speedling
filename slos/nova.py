@@ -34,7 +34,7 @@ class Libvirt(facility.VirtDriver):
 
     def get_node_packages(self):
         pkgs = super(Libvirt, self).get_node_packages()
-        pkgs.update({'lib-py3\\libguestfs', 'libvirt',
+        pkgs.update({'lib-py3\\libguestfs', 'srv-virt\\libvirt',
                      'util-cli\\libvirt', 'lib-py3\\libvirt'})
         return pkgs
 
@@ -175,7 +175,7 @@ class Nova(facility.OpenStack):
         nova_git_dir = gitutils.component_git_dir(self)
         usrgrp.group('libvirt')
         usrgrp.group('nova', 162)
-        usrgrp.user('nova', 162, ['libvirt'])
+        usrgrp.user('nova', 'nova', ['libvirt'])
         util.base_service_dirs('nova')
         self.ensure_path_exists('/etc/nova/rootwrap.d',
                                 owner='nova', group='nova')
@@ -251,7 +251,7 @@ nova ALL = (root) NOPASSWD: /usr/local/bin/privsep-helper *
 
         if 'nova-compute' in services:
             usrgrp.group('nova_migration', 983)
-            usrgrp.user('nova_migration', 986)  # TODO: give shell, distribute keys
+            usrgrp.user('nova_migration', 'nova_migration')  # TODO: give shell, distribute keys
 
             self.ensure_path_exists('/etc/nova/migration',
                                     owner='nova', group='nova')

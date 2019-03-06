@@ -93,6 +93,7 @@ innodb_flush_method = O_DIRECT
 slow-query-log = 1
 slow-query-log-file = /var/log/mariadb/slow_query.log
 long_query_time = 0.1
+bind-address = ::
 """
 
     # innodb_log_file_size changes requires manual file deletion,
@@ -142,6 +143,12 @@ wsrep_provider_options="gcache.size=300M; gcache.page_size=300M"
             'Unit': {'Description': 'Galera monitoring service for proxies'}
         }
 
+    def get_etcconf_d(self):
+        if util.get_distro()['family'] != 'debian':
+            return '/etc/my.cnf.d'
+        else:
+            return '/etc/mysql/mariadb.conf.d'
+
     def etc_sysconfig_clustercheck(self):
         password = util.get_keymgr()(self.name, 'clustercheckuser')
         return """MYSQL_USERNAME="clustercheckuser"
@@ -158,13 +165,14 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
         self.ensure_path_exists('/etc/systemd/system/mariadb.service.d')
         self.ini_file_sync('/etc/systemd/system/mariadb.service.d/limits.conf',
                            self.etc_systemd_system_mariadb_service_d_limits_conf())
-        self.ini_file_sync('/etc/systemd/system/mysqlchk@.service',
-                           self.etc_systemd_system_mysqlchk_service())
-        self.ini_file_sync('/etc/systemd/system/mysqlchk.socket',
-                           self.etc_systemd_system_mysqlchk_socket())
-        self.content_file('/etc/sysconfig/clustercheck',
-                          self.etc_sysconfig_clustercheck(),
-                          mode=0o640)
+        if util.get_distro()['family'] != 'debian':
+            self.ini_file_sync('/etc/systemd/system/mysqlchk@.service',
+                               self.etc_systemd_system_mysqlchk_service())
+            self.ini_file_sync('/etc/systemd/system/mysqlchk.socket',
+                               self.etc_systemd_system_mysqlchk_socket())
+            self.content_file('/etc/sysconfig/clustercheck',
+                              self.etc_sysconfig_clustercheck(),
+                              mode=0o640)
 
     def get_node_packages(self):
         pkgs = super(MariaDB, self).get_node_packages()
@@ -172,14 +180,15 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
         return pkgs
 
     def do_mariadb(cname):
-        localsh.run("systemctl enable mysqlchk.socket && systemctl start mysqlchk.socket")
+        if util.get_distro()['family'] != 'debian':
+            localsh.run("systemctl enable mysqlchk.socket && systemctl start mysqlchk.socket")
         localsh.run("systemctl start mariadb")
         localsh.run("mysql <<<\"SHOW GLOBAL STATUS LIKE 'wsrep_%';\" >/tmp/wsrep_init_state" + cname)
 
     def do_mariadb_cfg(cname, nodes, seed=False):
         self = facility.get_component(cname)
         self.have_content()
-        self.content_file('/etc/my.cnf.d/mariadb_openstack.cnf',
+        self.content_file(self.get_etcconf_d() + '/80-mariadb_openstack.cnf',
                           self.etc_my_cnf_d_mariadb_openstack_cnf(seed), mode=0o644)
 
     def do_create_clustr_user(cname):
@@ -202,7 +211,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
                     raise
 
     def do_mariadb_galera_seed(self):
-        localsh.run("galera_new_cluster")
+        localsh.run("systemctl stop mariadb; galera_new_cluster")
 
     def get_mariadb_state_dir(self):
         args = conf.get_args()
@@ -343,11 +352,17 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
                            'backup' + check)))
         balancer = self.get_balancer()
         if balancer:
+            if util.get_distro()['family'] == 'debian':
+                # the galera packages does not have cluster checker
+                # TODO: support mor mysql variants
+                option = ['tcpka']
+            else:
+                option = ['tcpka', 'httpchk']
             balancer.add_listener('mariadb', {
                                  'bind': '*:13306',
                                  'stick': 'on dst',
                                  'stick-table': 'type ip size 1024',
-                                 'option': ['tcpka', 'httpchk'],
+                                 'option': option,
                                  'timeout': {'client': '128m',
                                              'server': '128m'},
                                  'server': servers})

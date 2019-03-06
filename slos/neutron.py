@@ -26,7 +26,7 @@ def task_ovs(self):
 
 
 def ovs_pkgs(self):
-    return {'openvswitch'}
+    return {'srv-ovs\\switch'}
 
 
 def task_net_config(self):
@@ -166,7 +166,7 @@ class Neutron(facility.OpenStack):
         gconf = conf.get_global_config()
         global_service_union = gconf['global_service_flags']
         usrgrp.group('neutron', 996)
-        usrgrp.user('neutron', 993)
+        usrgrp.user('neutron', 'neutron')
         util.base_service_dirs('neutron')
         self.ensure_path_exists('/etc/neutron/conf.d',
                                 owner='neutron', group='neutron')
@@ -250,9 +250,14 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
             util.unit_file(c_srv['neutron-lbaasv2-agent']['unit_name']['src'],
                            '/usr/local/bin/neutron-lbaasv2-agent --config-file /etc/neutron/neutron.conf --config-dir /etc/neutron/conf.d/common --config-file /etc/neutron/lbaas_agent.ini',
                            'neutron')
+            if util.get_distro()['family'] != 'debian':
+                osrv = 'openvswitch.service'
+            else:
+                osrv = 'openvswitch-switch.service'
+
             util.unit_file(c_srv['neutron-openvswitch-agent']['unit_name']['src'],
                            '/usr/local/bin/neutron-openvswitch-agent --config-file /etc/neutron/neutron.conf --config-dir /etc/neutron/conf.d/common --config-file /etc/neutron/plugins/ml2/openvswitch_agent.ini',
-                           'neutron', requires='openvswitch.service', restart='on-failure')
+                           'neutron', requires=osrv, restart='on-failure')
 
         if 'neutron-metadata-agent' in services:
             self.ini_file_sync('/etc/neutron/metadata_agent.ini',
@@ -348,7 +353,11 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
         )""")
 
     def do_dummy_netconfig(cname):
-        localsh.run('systemctl start openvswitch.service')
+        if util.get_distro()['family'] != 'debian':
+            osrv = 'openvswitch.service'
+        else:
+            osrv = 'openvswitch-switch.service'
+        localsh.run('systemctl start ' + osrv)
 
         # TODO switch to os-net-config
         # wait (no --no-wait)

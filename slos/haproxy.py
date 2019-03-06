@@ -91,4 +91,4 @@ class HAProxy(facility.LoadBalancer):
         self.ini_file_sync('/etc/systemd/system/haproxy.service.d/limits.conf',
                            self.etc_systemd_system_haproxy_service_d_limits_conf())
         self.haproxy_file('/etc/haproxy/haproxy.cfg', cfg)
-        localsh.run('systemctl daemon-reload && systemctl start haproxy')
+        localsh.run('systemctl daemon-reload && systemctl reload-or-restart haproxy')
