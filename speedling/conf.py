@@ -47,9 +47,7 @@ def construct_parser(*extras):
 
 
 GLOBAL_CONFIG_EXAMPLE = {'allow_address_fallback': ['default_gw', 'sshed_address'],  # order matters
-                         'cinder_ceph_libvirt_secret_uuid': '457eb676-33da-42ec-9a8c-9293d545c337',  # move to ceph usage feature
-                         'vip': {'public': {'domain_name': '172.16.1.2', 'internal_address': '172.16.1.2'},
-                                 'internal': {'domain_name': '172.16.1.2', 'internal_address': '172.16.1.2'}}}
+                         'cinder_ceph_libvirt_secret_uuid': '457eb676-33da-42ec-9a8c-9293d545c337'}  # move to ceph usage feature
 
 GLOBAL_CONFIG = GLOBAL_CONFIG_EXAMPLE
 

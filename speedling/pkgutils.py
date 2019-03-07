@@ -190,25 +190,29 @@ class PKGMGR(object):
     @classmethod
     def install(cls, pkgs):
         retry = 5
-        LOG.info("Installing packages ..")  # to super, dedup
+        LOG.info("Installing packages ..")
         pkgs = cls.pkg_mapping(pkgs)
-        try:
-            localsh.run(cls.install_cmd + ' '.join(pkgs))
-        except:
-            retry -= 1
-            if not retry:
-                raise
+        while retry:
+            try:
+                localsh.run(cls.install_cmd + ' '.join(pkgs))
+                retry = 0
+            except:
+                retry -= 1
+                if not retry:
+                    raise
 
     @classmethod
     def update(cls):
         retry = 5
-        LOG.info("Updating packages ..")  # to super, dedup
-        try:
-            localsh.run(cls.update_cmd)
-        except:
-            retry -= 1
-            if not retry:
-                raise
+        LOG.info("Updating packages ..")
+        while retry:
+            try:
+                localsh.run(cls.update_cmd)
+                retry = 0
+            except:
+                retry -= 1
+                if not retry:
+                    raise
 
 
 # used for disabling package install, in case you are sure you have them all

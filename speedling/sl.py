@@ -2,6 +2,7 @@
 
 import logging
 
+
 from speedling import receiver
 from speedling import control
 from speedling import inv
@@ -50,8 +51,7 @@ def main(create_inventory_and_glb, use_globals,
     except:
         LOG.info('Looks Bad: ' + ', '.join(f.__name__ for f in facility.FAILED))
         raise
-    else:
-        LOG.info('Seams ok..')
+    LOG.info('Seams ok..')
 
 
 # it become a library

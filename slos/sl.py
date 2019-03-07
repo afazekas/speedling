@@ -181,10 +181,20 @@ def inv_extend(inventory, my_controller_services, my_worker_services):
 
 def create_inventory_and_glb():
     args = conf.get_args()
+    gconf = conf.GLOBAL_CONFIG
     if args.all_in_one:
         invent = all_in_one_inv()
+        # hack until not switching to the new form
+        addr = list(invent['hosts'].values())[0]['ssh_address']
+        gconf['vip'] = {'public': {'domain_name': addr, 'internal_address': addr},
+                        'internal': {'domain_name': addr, 'internal_address': addr}}
     else:
         invent = invutil.parse_ansible_invetory_ini(args.inv_extend)
+        # hack until not switching to the new form , also not ordered..
+        controller = next(iter(invent['host_in_group']['controller']))
+        addr = invent['hosts'][controller]['sl_ssh_address']
+        gconf['vip'] = {'public': {'domain_name': addr, 'internal_address': addr},
+                        'internal': {'domain_name': addr, 'internal_address': addr}}
 
     my_controller_services = {'haproxy', 'mariadb', 'rabbit', 'keystone', 'memcached',
                               'neutron-server', 'neutron-dhcp-agent', 'neutron-metadata-agent',
@@ -199,7 +209,6 @@ def create_inventory_and_glb():
     my_worker_services = {'nova-compute', 'neutron-openvswitch-agent', 'openvswitch', 'libvirtd'}
 
     inv_extend(invent, my_controller_services, my_worker_services)
-    gconf = conf.GLOBAL_CONFIG
 
     service_flags = set()
     EMPTY_SET = set()

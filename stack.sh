@@ -34,6 +34,6 @@ if [[ "$*" == *"--all-in-one"* ]] || [[ "$*" == *"--inv-extend"* ]]; then
 	extra=""
 fi
 
-chmod go-rwx "SSH_AUTHORIZED"
+chmod go-rwx "$SSH_AUTHORIZED"
 
 PYTHONPATH=. python3 slos/sl.py $extra "$@"  </dev/null
