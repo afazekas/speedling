@@ -10,6 +10,7 @@ git clone "https://github.com/openstack/keystone.git"
 git clone "https://github.com/openstack/swift.git"
 git clone "https://github.com/openstack/tempest.git"
 git clone "https://github.com/openstack/requirements.git"
+git clone "https://github.com/novnc/noVNC.git"
 
 pip3 install -c requirements/upper-constraints.txt -r nova/requirements.txt
 pip3 install -c requirements/upper-constraints.txt -r neutron/requirements.txt

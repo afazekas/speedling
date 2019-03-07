@@ -60,13 +60,60 @@ def task_nova_steps(self):
     sync_cmd = 'su -s /bin/sh -c "nova-manage db sync" nova'
     self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
 
-    self.wait_for_components(self.messaging)
-    # start services
     n_srv = set(self.services.keys())
+
+    wait_list = [self.messaging]
+    if self.novncweb:
+        wait_list.append(self.novncweb)
+
+    if self.spiceweb:
+        wait_list.append(self.spiceweb)
+
+    self.wait_for_components(*wait_list)
+    # start services
     self.call_do(self.hosts_with_any_service(n_srv), self.do_local_nova_service_start)
 
     self.wait_for_components(self.keystone, self.virtdriver)
     self.call_do(novas, self.do_cell_reg)
+
+
+def task_have_content(self):
+    hosts = self.hosts_with_component(self)
+    self.call_do(hosts, self.do_have_content)
+
+
+# This class maybe usable for the requirements repo as well
+class WebContent(facility.Component):
+
+    def __init__(self, *args, **kwargs):
+        super(WebContent, self).__init__(*args, **kwargs)
+        self.final_task = self.bound_to_instance(task_have_content)
+
+    def do_have_content(cname):
+        self = facility.get_component(cname)
+        self.have_content()
+
+    def get_web_dir():
+        return '/usr/share/spice-html5'  # nova default
+
+
+class NoVNC(WebContent):
+    origin_repo = 'https://github.com/novnc/noVNC.git'
+    deploy_source = 'src'
+    deploy_source_options = {'src', 'pkg', 'asset'}
+
+    def get_node_packages(self):
+        pkgs = super(NoVNC, self).get_node_packages()
+        if self.deploy_source == 'pkg':
+            pkgs.update({'novnc'})
+        return pkgs
+
+    def get_web_dir(self):
+        if self.deploy_source == 'pkg':
+            return '/usr/share/novnc'
+        else:
+            return gitutils.component_git_dir(self)
+        # TODO: fetch asset asset/compname/novnc.tar.gz
 
 
 class Nova(facility.OpenStack):
@@ -117,11 +164,13 @@ class Nova(facility.OpenStack):
         self.peer_info = {}
         self.sql = self.dependencies["sql"]
         self.backends = self.dependencies["backends"]
-        self.haproxy = self.dependencies["loadbalancer"]
+        self.loadbalancer = self.dependencies.get("loadbalancer", None)
         self.keystone = self.dependencies["keystone"]
         self.messaging = self.dependencies["messaging"]
         self.virtdriver = self.dependencies["virtdriver"]
         self.networking = self.dependencies["networking"]
+        self.novncweb = self.dependencies.get("novncweb", None)
+        self.spiceweb = self.dependencies.get("spiceweb", None)
 
     def etc_nova_nova_conf(self):
         # NOTE! mariadb.db_url not required on compute when the use_conductur is False
@@ -145,7 +194,7 @@ class Nova(facility.OpenStack):
                             'security_group_api': "neutron",
                             'log_dir': '/var/log/nova',
                             'default_floating_pool': "public",  # ext net needs to match
-                            'state_path': '/var/lib/nova'
+                            'state_path': '/var/lib/nova',
                             },
                 'keystone_authtoken': self.keystone.authtoken_section('nova'),
                 'placement':  placement_section,
@@ -213,8 +262,9 @@ class Nova(facility.OpenStack):
             util.unit_file(self.services['nova-console']['unit_name']['src'],
                            '/usr/local/bin/nova-console',
                            'nova')
-            util.unit_file(self.services['nova-spicehtml5proxy']['unit_name']['src'],
-                           '/usr/local/bin/nova-spicehtml5proxy',
+
+            util.unit_file(self.services['nova-xvpvncproxy']['unit_name']['src'],
+                           '/usr/local/bin/nova-xvpvncproxy',
                            'nova')
             util.unit_file(self.services['nova-scheduler']['unit_name']['src'],
                            '/usr/local/bin/nova-scheduler',
@@ -222,11 +272,19 @@ class Nova(facility.OpenStack):
             util.unit_file(self.services['nova-api-metadata']['unit_name']['src'],
                            '/usr/local/bin/nova-api-metadata',
                            'nova')
-            util.unit_file(self.services['nova-xvpvncproxy']['unit_name']['src'],
-                           '/usr/local/bin/nova-xvpvncproxy',
+
+            web = '/usr/share/spice-html5'
+            if self.spiceweb:
+                web = self.spiceweb.get_web_dir()
+            util.unit_file(self.services['nova-spicehtml5proxy']['unit_name']['src'],
+                           '/usr/local/bin/nova-spicehtml5proxy --web ' + web,  # quote
                            'nova')
+
+            web = '/usr/share/novnc'
+            if self.novncweb:
+                web = self.novncweb.get_web_dir()
             util.unit_file(self.services['nova-novncproxy']['unit_name']['src'],
-                           '/usr/local/bin/nova-novncproxy',
+                           '/usr/local/bin/nova-novncproxy --web ' + web,
                            'nova')
             util.unit_file(self.services['nova-consoleauth']['unit_name']['src'],
                            '/usr/local/bin/nova-consoleauth',

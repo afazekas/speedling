@@ -71,7 +71,7 @@ def task_keystone_ready(self):
 
 class Keystone(facility.OpenStack):
     origin_repo = 'https://github.com/openstack/keystone.git'
-    deploy_source = 'src',
+    deploy_source = 'src'
     services = {'keystone': {'deploy_mode': 'mod_wsgi'}}
 
     def __init__(self, *args, **kwargs):

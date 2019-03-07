@@ -83,11 +83,14 @@ def createmodel():
                                                    'keystone': mykeystone,
                                                    'ifdrivers': {'openvswitch': interface_driver}})
 
+    mynovnc = slos.nova.NoVNC()
+
     mynova = slos.nova.Nova(dependencies={'loadbalancer': myhaproxy,
                                           'sql': mymariadb,
                                           'memcached': mymemcached,
                                           'messaging': myrabbitmq,
                                           'keystone': mykeystone,
+                                          'novncweb': mynovnc,
                                           'virtdriver': myvirt_driver,
                                           'cells': {'cell0': {'messaging': myrabbitmq}, 'sql': mymariadb},
                                           'networking': myneutron,
@@ -157,7 +160,7 @@ def inv_extend(inventory, my_controller_services, my_worker_services):
                                             'ssh_user': 'stack',
                                             'ssh_address': var['sl_ssh_address'],
                                             'services': my_controller_services,
-                                            'extra_components': ['pythonopenstackclient', 'tempest', 'requirements']})
+                                            'extra_components': ['pythonopenstackclient', 'tempest', 'novnc', 'requirements']})
 
     if 'worker' in hg:
         for h in hg['worker']:
@@ -176,7 +179,7 @@ def inv_extend(inventory, my_controller_services, my_worker_services):
                                             'ssh_user': 'stack',
                                             'ssh_address': var['sl_ssh_address'],
                                             'services': set.union(my_worker_services, my_controller_services),
-                                            'extra_components': ['pythonopenstackclient', 'requirements', 'tempest']})
+                                            'extra_components': ['pythonopenstackclient', 'requirements', 'tempest', 'novnc']})
 
 
 def create_inventory_and_glb():

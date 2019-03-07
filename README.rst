@@ -85,7 +85,7 @@ Basic flow with local vm creation:
     source state/admin-openrc.sh
     openstack image list
     cd /opt/stack/tempest/
-    stestr run minim
+    PYTHON=python3 stestr run minim
 
 Basic flow if you are logged into a throw away test machine
 
@@ -100,4 +100,4 @@ Basic flow if you are logged into a throw away test machine
     source state/admin-openrc.sh
     openstack image list
     cd /opt/stack/tempest/
-    stestr run minim
+    PYTHON=python3 stestr run minim

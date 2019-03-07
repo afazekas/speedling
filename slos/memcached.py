@@ -14,7 +14,7 @@ def task_memcached_steps(self):
 
 class Memcached(facility.Component):
     services = {'memcached': {'deploy_mode': 'standalone'}}
-    default_deploy_source = 'pkg'
+    deploy_source = 'pkg'
 
     def __init__(self, **kwargs):
         super(Memcached, self).__init__()

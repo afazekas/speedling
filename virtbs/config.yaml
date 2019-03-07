@@ -15,8 +15,8 @@ image_flow:
     opensuse-15.0:
         driver: image_download
         url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-{key}.qcow2
-        version_key: '0.0.4-Buildlp150.12.123'
-        sha256: '426f545bc7fe3518bfe4dae8d6cecb470ac3f306c03a5178824181f29a390981'
+        version_key: '0.0.4-Buildlp150.12.124'
+        sha256: 'dadcb47d14121b4240827ce9d92fc3d99b1142887dc37adb294493cef698973a'
         fmt: qcow2
     f29-my:
         driver: image_virt_customize

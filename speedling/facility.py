@@ -37,9 +37,9 @@ UNIT_NAME_MAPPING = {}
 class Component(object):
 
     default_component_config = {}
-    default_deploy_source = 'src'
-    default_deploy_mode = 'standalone'
-    supported_deploy_mode = {'src', 'pkg', 'pip'}
+    deploy_source = 'src'
+    deploy_mode = 'standalone'
+    supported_deploy_mode = {'src', 'pkg', 'pip', 'asset'}
     services = {}
     leaf = True
     final_task = None
@@ -192,7 +192,14 @@ class Component(object):
         return inv.hosts_with_any_service(set(s + self.suffix for s in services))
 
     def hosts_with_component(self, component):
-        return inv.hosts_with_component(component + self.suffix)
+        if isinstance(component, Component):
+            component_name = component.name
+        else:
+            if '@' not in component:
+                component_name = component + self.suffix
+            else:
+                component_name = component
+        return inv.hosts_with_component(component_name)
 
     def get_state_dir(self, extra=''):
         return util.get_state_dir(os.path.sep.join((self.name, extra)))
@@ -254,8 +261,25 @@ class Component(object):
     def have_binaries(self):
         pkgutils.ensure_compose()
 
+    # let the have_content call this src_
+    def src_fetch(self):
+        if self.deploy_source == 'src':
+            gconf = conf.get_global_config()
+            need_git = gconf.get('use_git', True)  # switch these if you do have good image
+            if need_git:  # TODO: add more repo types
+                gitutils.process_component_repo(self)
+
+    def src_compile(self):
+        pass
+
+    def src_install(self):
+        pass
+
     def have_content(self):
         self.have_binaries()
+        self.src_fetch()
+        self.src_compile()
+        self.src_install()
         self.etccfg_content()
 
     def wait_for_components(self, *comps):
@@ -277,15 +301,20 @@ class Component(object):
         return {}
 
     # TODO add default bounce condition and coordinated bounce
+    def __str__(self):
+        return self.name
 
 
 class LoadBalancer(Component):
+    deploy_source = 'pkg'
     # TODO: make LB abstract to support LB != HAProxy
     # NOTE: theoretically httpd can do ballancing, but ..
     pass
 
 
 class SQLDB(Component):
+    deploy_source = 'pkg'
+
     # Consider postgres
     def db_url(*args, **kwargs):
         raise NotImplementedError
@@ -296,6 +325,7 @@ class SQLDB(Component):
 
 
 class Messaging(Component):
+    deploy_source = 'pkg'
 
     def get_transport_url(self):
         raise NotImplementedError
@@ -345,19 +375,14 @@ class OpenStack(Component):
         return pkgs
 
     # overrides
-    def have_content(self):
-        self.have_binaries()  # -devel
+    def src_install(self):
         gconf = conf.get_global_config()
-        need_git = gconf.get('use_git', True)  # switch these if you do have good image
         need_pip = gconf.get('use_pip', True)
-        if need_git:
-            gitutils.process_component_repo(self)
         if need_pip:
             if self.python_version != 2:
                 piputils.setup_develop(self)
             else:
                 piputils.setup_develop2(self)
-        self.etccfg_content()
 
 
 class InterfaceDriver(Component):
