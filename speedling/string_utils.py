@@ -1,5 +1,5 @@
-import string
 import random
+import string
 
 
 # consider importing tempest/lib/common/utils/data_utils instead

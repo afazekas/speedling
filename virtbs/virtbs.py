@@ -1,43 +1,43 @@
 from __future__ import print_function
-import libvirt
-import re
-import sys
+
+import argparse
+import errno
+import grp
+# is ujson still the fastest ?
+# anyjson did not had dump
+import json
 import os
 import os.path
+import pwd
+import re
+import sys
+import uuid
+import xml.etree.ElementTree as ET
+from collections import OrderedDict
+from collections import defaultdict
+
+import libvirt
 import yaml
+
+import __main__
+# WARNING: improper shell escapes, evil guy can be evil!
+from speedling import cfgfile
+from speedling import fetch
+from speedling import localsh
+from speedling import netutils
+from speedling import util
+
 try:
     from shlex import quote as cmd_quote
 except ImportError:
     from pipes import quote as cmd_quote
 
-# WARNING: improper shell escapes, evil guy can be evil!
-from speedling import localsh
-from speedling import cfgfile
-from speedling import netutils
-from speedling import fetch
-from speedling import util
-
-import uuid
-import errno
-import pwd
-import grp
-import argparse
-
-import __main__
 
 try:
     import virtualbmc.manager as vbmc
     VIRTBMC_ENABLED = True
 except ImportError:
     VIRTBMC_ENABLED = False
-
-from collections import defaultdict
-from collections import OrderedDict
-
-import xml.etree.ElementTree as ET
-# is ujson still the fastest ?
-# anyjson did not had dump
-import json
 
 
 # TODO: init selinux perm
@@ -259,11 +259,11 @@ def create_backed_qcow2(src, dst, size='10G', bfmt='raw'):
             size = image_size
         localsh.run("qemu-img create -f qcow2 -o 'backing_fmt={bfmt},"
                     "backing_file={src}' '{dst}' '{size}'".format(
-                     src=src, dst=dst, size=size, bfmt=bfmt))
+                        src=src, dst=dst, size=size, bfmt=bfmt))
     else:
         localsh.run("qemu-img create -f qcow2 -o 'backing_fmt={bfmt},"
                     "backing_file={src}' '{dst}'".format(
-                         src=src, dst=dst, bfmt=bfmt))
+                        src=src, dst=dst, bfmt=bfmt))
     os.chown(dst, IMAGE_OWNER, IMAGE_GROUP)
 
 
@@ -271,10 +271,10 @@ def create_backed_qcow2(src, dst, size='10G', bfmt='raw'):
 def create_empty_disk(dst, size, fmt='qcow2'):
     if fmt == 'raw':
         localsh.run("truncate -s {size} {dst}".format(
-          fmt=fmt, dst=dst))
+            fmt=fmt, dst=dst))
     else:
         localsh.run("qemu-img create -f {fmt} '{dst}' '{size}'".format(
-          fmt=fmt, dst=dst, size=size))
+            fmt=fmt, dst=dst, size=size))
         # to py ?
     os.chown(dst, IMAGE_OWNER, IMAGE_GROUP)
 
@@ -285,15 +285,15 @@ def create_empty_disk(dst, size, fmt='qcow2'):
 # max offset is reserved for  brodacast
 def get_mac_for(build_slice, net_id, offset):
     return '{MAC_PREFIX}:{bslice:02x}:{net_id:02x}:{offset:02x}'.format(
-            MAC_PREFIX=MAC_PREFIX,
-            bslice=build_slice, net_id=net_id, offset=offset)
+        MAC_PREFIX=MAC_PREFIX,
+        bslice=build_slice, net_id=net_id, offset=offset)
 
 
 def get_ipv4_for(build_slice, net_id, offset):
     # net_id unused
     return '{IPV4_PREFIX}.{bslice}.{offset}'.format(
-            IPV4_PREFIX=IPV4_PREFIX,
-            bslice=build_slice, net_id=net_id, offset=offset)
+        IPV4_PREFIX=IPV4_PREFIX,
+        bslice=build_slice, net_id=net_id, offset=offset)
 
 
 # normally it is just for the machines to cumminicate with themself
@@ -357,7 +357,7 @@ def create_my_net(conn, build_slice, hosts):
 
 def virt_domain_name(build_slice, hostname):
     return 'bs{build_slice:x}-{name}'.format(
-            build_slice=build_slice, name=hostname)
+        build_slice=build_slice, name=hostname)
 
 
 # TODO: clean on exception
@@ -426,11 +426,11 @@ def bootvm(conn, base_image, hostname, build_slice, offset,
 def files_to_iso(filemap, config_image):
     # filemap is target,source pairs
     pathspec = ' '.join(('='.join((target, source)).join(("'", "'"))
-                        for (target, source) in filemap))
+                         for (target, source) in filemap))
     # use real shell escape ? single=False
     localsh.run("mkisofs -graft-points -o '{config_image}' "
                 "-V cidata -r -J --quiet {pathspec}".format(
-                  pathspec=pathspec, config_image=config_image))
+                    pathspec=pathspec, config_image=config_image))
 
 
 # dhcp 'request host-name' instead of meta-data ?
@@ -573,9 +573,9 @@ def image_download(name, data, key=None, renew=False):
         if 'tar' not in data['compression']:
             # xz does sparse, others ?
             localsh.run(("{compression} --decompress "
-                        "<'{download_path}' >'{work_file}'").format(
-                    compression=data['compression'],
-                    download_path=download_path, work_file=work_file))
+                         "<'{download_path}' >'{work_file}'").format(
+                compression=data['compression'],
+                download_path=download_path, work_file=work_file))
         else:
             if 'file_in_tar_pattern' not in D:
                 raise NotImplementedError('We are not gussing the filename in '
@@ -585,15 +585,15 @@ def image_download(name, data, key=None, renew=False):
             # no way specifiy the decompressed file final name !
             # not tested code path
             localsh.run(("cd '{FETCH_PATH}'; tar -xf "
-                        "'{download_path}' '{in_file}'; "
+                         "'{download_path}' '{in_file}'; "
                          "cp --sparse=always '{in_file}' '{work_file}' "
                          "; rm '{in_file}'").format(
                         FETCH_PATH=FETCH_PATH, download_path=download_path,
                         in_file=in_file))
     else:
         localsh.run(("cp --sparse=always "
-                    "'{download_path}' '{work_file}'").format(
-                download_path=download_path, work_file=work_file))
+                     "'{download_path}' '{work_file}'").format(
+            download_path=download_path, work_file=work_file))
     tmp_link = work_file + '-lnk'
     os.symlink(work_file, tmp_link)
     os.rename(tmp_link, default_path)
@@ -613,9 +613,9 @@ def virt_costumize_script(image, script_file, args_str, log_file=None):
                                 "--chmod 755:/root/{base_name} "
                                 "--run-command '/root/{base_name} {args_str}' "
                                 "--selinux-relabel ").format(
-                                image=image, script_file=script_file,
-                                base_name=base_name,
-                                args_str=args_str))
+        image=image, script_file=script_file,
+        base_name=base_name,
+        args_str=args_str))
     print(log)
     if log_file:
         f = open(log_file, "w")
@@ -695,9 +695,9 @@ image_flow_table = {}
 def base_image(image_type, version_key=None):
     # reqursively does the build steps to reach a valid image
     (fmt, image) = image_flow_table[image_type]['driver'](
-                                                image_type,
-                                                image_flow_table[image_type],
-                                                version_key)
+        image_type,
+        image_flow_table[image_type],
+        version_key)
     if fmt == 'qcow2':
         # WARNING: assumes globaly uniquie name
         base_file = os.path.basename(image)
@@ -745,7 +745,7 @@ def wipe_domain_by_uuid(UUID):
 def wipe_slice(build_slice):
     conn = get_libvirt_conn()
     ss = 'bs{build_slice}'.format(
-                     build_slice=build_slice)
+        build_slice=build_slice)
 
     # just delete everything starts with the uuid, instead of xml parse ?
     # the configdrive build files are not deleted yet
@@ -974,14 +974,14 @@ def process_request(build_slice, machine_types, request):
                                        for k, v in ssh_general_options.items())
     # TODO: create variant with proxy command
     generate_ansible_inventory(unrolled, {
-                        'ansible_ssh_user': 'stack',
-                        'ansible_ssh_common_args': ansible_ssh_common_args},
-                               'hosts-bs' + str(build_slice))
+        'ansible_ssh_user': 'stack',
+        'ansible_ssh_common_args': ansible_ssh_common_args},
+        'hosts-bs' + str(build_slice))
 
     generate_ansible_inventory_speedling(unrolled, build_slice, {
-                        'ansible_ssh_user': 'stack',
-                        'ansible_ssh_common_args': ansible_ssh_common_args},
-                               'sl-hosts-bs' + str(build_slice))
+        'ansible_ssh_user': 'stack',
+        'ansible_ssh_common_args': ansible_ssh_common_args},
+        'sl-hosts-bs' + str(build_slice))
 
     generate_ssh_config(unrolled, ssh_general_options,
                         'sshconf-bs' + str(build_slice))
@@ -997,9 +997,9 @@ def process_request(build_slice, machine_types, request):
                                                hst=host_ip, usr=l_user)
     del ssh_general_options['ControlPath']  # assume the remote has a better
     generate_ansible_inventory(unrolled, {
-                        'ansible_ssh_user': 'stack',
-                        'ansible_ssh_common_args': ansible_ssh_common_args},
-                               'hosts-remote-bs' + str(build_slice))
+        'ansible_ssh_user': 'stack',
+        'ansible_ssh_common_args': ansible_ssh_common_args},
+        'hosts-remote-bs' + str(build_slice))
 
     generate_ssh_config(unrolled, ssh_general_options,
                         'sshconf-remote-bs' + str(build_slice))
@@ -1040,7 +1040,7 @@ def create_workspace():
         localsh.run("ssh-keygen -t rsa -b 4096 -P '' -f '{path}'".format(path=SSH_PRIVATE_KEY_PATH))
     if not os.path.isfile(SSH_PUBLIC_KEY_LIST_PATH):
         localsh.run("ssh-keygen -y -f '{private'} > '{public}'".format(private=SSH_PRIVATE_KEY_PATH,
-                    public=SSH_PUBLIC_KEY_LIST_PATH))
+                                                                       public=SSH_PUBLIC_KEY_LIST_PATH))
     non_root = queury_non_root()
     if non_root:
         localsh.run("chown {non_root} '{priv}'".format(non_root=non_root,
@@ -1072,7 +1072,7 @@ image_virt_customize.flow_exportd = True
 
 def gen_parser():
     parser = argparse.ArgumentParser(
-                      description='Virt Build Slices the VM manager')
+        description='Virt Build Slices the VM manager')
     parser.add_argument('-s', '--slice',
                         help='Receiver mode act on remote host',
                         type=int,

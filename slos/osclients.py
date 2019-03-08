@@ -1,9 +1,7 @@
-from speedling import facility
-from speedling import piputils
-
-
 import logging
 
+from speedling import facility
+from speedling import piputils
 
 LOG = logging.getLogger(__name__)
 

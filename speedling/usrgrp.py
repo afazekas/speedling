@@ -1,13 +1,12 @@
 import crypt
-import pwd  # getent passwd
-import spwd  # shadow
 import grp  # getent groups
 import logging
 import numbers
-
-from speedling import localsh
+import pwd  # getent passwd
+import spwd  # shadow
 from hmac import compare_digest as compare_hash
 
+from speedling import localsh
 
 LOG = logging.getLogger(__name__)
 # TODO: create mass maniplation version all usr group -> shadow, passwd, group once in single file swap
@@ -58,8 +57,8 @@ def group(name, gid=None, gpasswd=None):
     else:
         gid_opt = ''
     localsh.run("groupadd -f {gid_opt} {passwd_opt}  '{name}'".format(
-                 gid_opt=gid_opt,
-                 passwd_opt=passwd_opt, name=name))
+        gid_opt=gid_opt,
+        passwd_opt=passwd_opt, name=name))
     return 1
 
 

@@ -1,13 +1,11 @@
-from speedling import util
-from speedling import conf
-from speedling import facility
-from speedling import gitutils
-
-from speedling import localsh
-from speedling import fetch
-
 import logging
 
+from speedling import conf
+from speedling import facility
+from speedling import fetch
+from speedling import gitutils
+from speedling import localsh
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -82,13 +80,13 @@ class Tempest(facility.OpenStack):
     def do_tempest_cfg(cname, image_ref, image_ref_alt, public_network_id, min_compute_nodes=1):
         self = facility.get_component(cname)
         tempest_git_dir = gitutils.component_git_dir(self)
-        self.ensure_path_exists(tempest_git_dir, owner='stack', group='stack')
+        self.file_path(tempest_git_dir, owner='stack', group='stack')
 
         cfg = self.gen_tempest_conf(image_ref, image_ref_alt, public_network_id, min_compute_nodes)
-        self.ini_file_sync('/'.join((tempest_git_dir, 'etc', 'tempest.conf')),
-                           cfg,
-                           mode=0o755,
-                           owner='stack', group='stack')
+        self.file_ini('/'.join((tempest_git_dir, 'etc', 'tempest.conf')),
+                      cfg,
+                      mode=0o755,
+                      owner='stack', group='stack')
 
     def do_network_id(cname):
         net_uuid = localsh.ret(util.userrc_script('admin') +
@@ -161,15 +159,15 @@ class Tempest(facility.OpenStack):
                 'volume': {'storage_protocol': 'ceph',
                            'max_microversion': 'latest'},
                 'service_available': {
-                  'horizon': True if 'horizon' in service_flags else False,
-                  'cinder': True if 'cinder-api' in service_flags else False,
-                  'nova': True if 'nova-api' in service_flags else False,
-                  'neutron': True if 'neutron-server' in service_flags else False,
-                  'glance': True if 'glance-api' in service_flags else False,
-                  'heat': True if 'heat-api' in service_flags else False,
-                  'ironic': True if 'ironic-api' in service_flags else False,
-                  'zaqar': True if 'zaqar' in service_flags else False,
-                  'swift': True if 'swift-proxy' in service_flags else False}}
+            'horizon': True if 'horizon' in service_flags else False,
+            'cinder': True if 'cinder-api' in service_flags else False,
+            'nova': True if 'nova-api' in service_flags else False,
+            'neutron': True if 'neutron-server' in service_flags else False,
+            'glance': True if 'glance-api' in service_flags else False,
+            'heat': True if 'heat-api' in service_flags else False,
+            'ironic': True if 'ironic-api' in service_flags else False,
+            'zaqar': True if 'zaqar' in service_flags else False,
+            'swift': True if 'swift-proxy' in service_flags else False}}
 
     def get_node_packages(self):
         pkgs = super(Tempest, self).get_node_packages()

@@ -8,7 +8,7 @@ ARGS = None
 
 def construct_parser(*extras):
     parser = argparse.ArgumentParser(
-                      description='Speedling openstack dev installler')
+        description='Speedling openstack dev installler')
     parser.add_argument('-r', '--receiver',
                         help='Receiver mode act on remote host',
                         action='store_true')

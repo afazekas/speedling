@@ -1,12 +1,11 @@
-from speedling import util
+import logging
+
 from speedling import conf
-from speedling import tasks
 from speedling import facility
 from speedling import gitutils
-
+from speedling import tasks
 from speedling import usrgrp
-
-import logging
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 sp = 'sl-'
@@ -83,20 +82,20 @@ class Cinder(facility.OpenStack):
         usrgrp.user('cinder', 'cinder')
         util.base_service_dirs('cinder')
         comp = self
-        self.ensure_path_exists('/var/lib/cinder/lock',
-                                owner='cinder', group='cinder')
+        self.file_path('/var/lib/cinder/lock',
+                       owner='cinder', group='cinder')
 
-        self.ini_file_sync('/etc/cinder/cinder.conf', self.etc_cinder_cinder_conf(),
-                           owner='cinder', group='cinder')
+        self.file_ini('/etc/cinder/cinder.conf', self.etc_cinder_cinder_conf(),
+                      owner='cinder', group='cinder')
         cinder_git_dir = gitutils.component_git_dir(comp)
 
-        self.install_file('/etc/cinder/api-paste.ini',
+        self.file_install('/etc/cinder/api-paste.ini',
                           '/'.join((cinder_git_dir,
-                                   'etc/cinder/api-paste.ini')),
+                                    'etc/cinder/api-paste.ini')),
                           mode=0o644, owner='cinder', group='cinder')
-        self.install_file('/etc/cinder/resource_filters.json',
+        self.file_install('/etc/cinder/resource_filters.json',
                           '/'.join((cinder_git_dir,
-                                   'etc/cinder/resource_filters.json')),
+                                    'etc/cinder/resource_filters.json')),
                           mode=0o644,
                           owner='cinder', group='cinder')
         services = self.filter_node_enabled_services(c_srv)
@@ -116,19 +115,19 @@ class Cinder(facility.OpenStack):
                            'cinder')
             # TODO handle bin dir
             if 'cinder-volume' in services or 'cinder-backup' in services:
-                self.content_file('/etc/sudoers.d/cinder', """Defaults:cinder !requiretty
+                self.file_plain('/etc/sudoers.d/cinder', """Defaults:cinder !requiretty
 cinder ALL = (root) NOPASSWD: /usr/local/bin/cinder-rootwrap /etc/cinder/rootwrap.conf *
 cinder ALL = (root) NOPASSWD: /usr/bin/cinder-rootwrap /etc/cinder/rootwrap.conf *
 """)
-                self.ensure_path_exists('/etc/cinder/rootwrap.d',
-                                        owner='cinder', group='cinder')
-                self.install_file('/etc/cinder/rootwrap.d/volume.filters',
+                self.file_path('/etc/cinder/rootwrap.d',
+                               owner='cinder', group='cinder')
+                self.file_install('/etc/cinder/rootwrap.d/volume.filters',
                                   '/'.join((cinder_git_dir,
-                                           'etc/cinder/rootwrap.d/volume.filters')),
+                                            'etc/cinder/rootwrap.d/volume.filters')),
                                   mode=0o444)
-                self.install_file('/etc/cinder/rootwrap.conf',
+                self.file_install('/etc/cinder/rootwrap.conf',
                                   '/'.join((cinder_git_dir,
-                                           'etc/cinder/rootwrap.conf')),
+                                            'etc/cinder/rootwrap.conf')),
                                   mode=0o444)
 
     def do_local_cinder_service_start(cname):

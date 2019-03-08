@@ -2,35 +2,31 @@
 # it is a python >3.6 like DSL, but long lines are allowed! ;-)
 
 
-import os
-import speedling.sl
-
-from speedling import cfgfile
-
 import logging
+import os
 import socket
 
-from speedling import inv
-from speedling import facility
-from speedling import util
-from speedling import conf
-from speedling import invutil
-from speedling import netutils
-
-
-import slos.memcached
-import slos.rabbitmq
-import slos.mariadb
-import slos.keystone
-import slos.glance
-import slos.nova
-import slos.neutron
+import slos.ceph
 import slos.cinder
+import slos.glance
+import slos.haproxy
+import slos.keystone
+import slos.mariadb
+import slos.memcached
+import slos.neutron
+import slos.nova
+import slos.osclients
+import slos.rabbitmq
 import slos.swift
 import slos.tempest
-import slos.osclients
-import slos.ceph
-import slos.haproxy
+import speedling.sl
+from speedling import cfgfile
+from speedling import conf
+from speedling import facility
+from speedling import inv
+from speedling import invutil
+from speedling import netutils
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 UNIT_PREFIX = 'sl-'

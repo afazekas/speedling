@@ -7,8 +7,9 @@ import errno
 import fcntl
 from collections import abc
 
-from speedling import string_utils
 from speedling import facility
+from speedling import string_utils
+
 # json used instead of yaml
 # because there is no jq like poppular fast shell utility for yaml
 # we might consider some shell sourcable data format as well

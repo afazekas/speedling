@@ -1,14 +1,13 @@
-from speedling import facility
-from speedling import util
-from speedling import conf
-from speedling import localsh
+import logging
 import os
 import re
 import time
-
-import logging
 import urllib
 
+from speedling import conf
+from speedling import facility
+from speedling import localsh
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 SECOND_THING = re.compile('\w+\s+(\w+)')
@@ -26,9 +25,9 @@ def task_mariadb_steps(self):
 
     self.call_do(h, self.do_mariadb_cfg, c_kwargs={'nodes': host_ips})
     state_dir = self.get_mariadb_state_dir()
-    self.ensure_path_exists(state_dir,
-                            owner=os.getuid(),
-                            group=os.getgid())
+    self.file_path(state_dir,
+                   owner=os.getuid(),
+                   group=os.getgid())
 
     seed = util.rand_pick(h)
     self.call_do(seed, self.do_mariadb_galera_seed)
@@ -127,21 +126,21 @@ wsrep_provider_options="gcache.size=300M; gcache.page_size=300M"
         return mysql_conf
 
     def etc_systemd_system_mariadb_service_d_limits_conf(self): return {
-            'Service': {'LimitNOFILE': 16384}
-        }
+        'Service': {'LimitNOFILE': 16384}
+    }
 
     def etc_systemd_system_mysqlchk_socket(self): return {
-            'Socket': {'ListenStream': 9200,
-                       'Accept': 'yes'},
-            'Unit': {'Description': 'Galera monitoring socket for proxies'},
-            'Install': {'WantedBy': 'sockets.target'}
-        }
+        'Socket': {'ListenStream': 9200,
+                   'Accept': 'yes'},
+        'Unit': {'Description': 'Galera monitoring socket for proxies'},
+        'Install': {'WantedBy': 'sockets.target'}
+    }
 
     def etc_systemd_system_mysqlchk_service(self): return {
-            'Service': {'ExecStart': '-/usr/bin/clustercheck',
-                        'StandardInput': 'socket'},
-            'Unit': {'Description': 'Galera monitoring service for proxies'}
-        }
+        'Service': {'ExecStart': '-/usr/bin/clustercheck',
+                    'StandardInput': 'socket'},
+        'Unit': {'Description': 'Galera monitoring service for proxies'}
+    }
 
     def get_etcconf_d(self):
         if util.get_distro()['family'] != 'debian':
@@ -162,17 +161,17 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
 
     def etccfg_content(self):
         super(MariaDB, self).etccfg_content()
-        self.ensure_path_exists('/etc/systemd/system/mariadb.service.d')
-        self.ini_file_sync('/etc/systemd/system/mariadb.service.d/limits.conf',
-                           self.etc_systemd_system_mariadb_service_d_limits_conf())
+        self.file_path('/etc/systemd/system/mariadb.service.d')
+        self.file_ini('/etc/systemd/system/mariadb.service.d/limits.conf',
+                      self.etc_systemd_system_mariadb_service_d_limits_conf())
         if util.get_distro()['family'] != 'debian':
-            self.ini_file_sync('/etc/systemd/system/mysqlchk@.service',
-                               self.etc_systemd_system_mysqlchk_service())
-            self.ini_file_sync('/etc/systemd/system/mysqlchk.socket',
-                               self.etc_systemd_system_mysqlchk_socket())
-            self.content_file('/etc/sysconfig/clustercheck',
-                              self.etc_sysconfig_clustercheck(),
-                              mode=0o640)
+            self.file_ini('/etc/systemd/system/mysqlchk@.service',
+                          self.etc_systemd_system_mysqlchk_service())
+            self.file_ini('/etc/systemd/system/mysqlchk.socket',
+                          self.etc_systemd_system_mysqlchk_socket())
+            self.file_plain('/etc/sysconfig/clustercheck',
+                            self.etc_sysconfig_clustercheck(),
+                            mode=0o640)
 
     def get_node_packages(self):
         pkgs = super(MariaDB, self).get_node_packages()
@@ -188,8 +187,8 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
     def do_mariadb_cfg(cname, nodes, seed=False):
         self = facility.get_component(cname)
         self.have_content()
-        self.content_file(self.get_etcconf_d() + '/80-mariadb_openstack.cnf',
-                          self.etc_my_cnf_d_mariadb_openstack_cnf(seed), mode=0o644)
+        self.file_plain(self.get_etcconf_d() + '/80-mariadb_openstack.cnf',
+                        self.etc_my_cnf_d_mariadb_openstack_cnf(seed), mode=0o644)
 
     def do_create_clustr_user(cname):
         self = facility.get_component(cname)
@@ -225,7 +224,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
     def mark_mariadb_boostrap(self):
         state_dir = self.get_mariadb_state_dir()
         b_file = state_dir + '/' + 'bootstrapped'
-        self.content_file(b_file, '', owner=os.getuid(), group=os.getgid())
+        self.file_plain(b_file, '', owner=os.getuid(), group=os.getgid())
 
     def do_mariadb_query_state(cname):
         wsrep_cluster_size = None
@@ -298,7 +297,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
                     script = ("if mysql -u root <<EOF\n | grep FREE_FOR_ALL &&"
                               " [ -f {dir}/{schema}.sql] then\n{sql}\nEOF\n"
                               "mysql -u root <{dir}/{schema}.sql; fi".format(
-                                dir=pre_sync_script_dir, schema=schema))
+                                  dir=pre_sync_script_dir, schema=schema))
                 else:
                     script = 'mysql -u root <<EOF\n{sql}\nEOF\n'.format(
                         sql=sql)
@@ -349,7 +348,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
             check = ''
         for i in ci:
             servers.append(' '.join((i['hostname'], i['addr'] + ':' + str(i['port']),
-                           'backup' + check)))
+                                     'backup' + check)))
         balancer = self.get_balancer()
         if balancer:
             if util.get_distro()['family'] == 'debian':
@@ -359,13 +358,13 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
             else:
                 option = ['tcpka', 'httpchk']
             balancer.add_listener('mariadb', {
-                                 'bind': '*:13306',
-                                 'stick': 'on dst',
-                                 'stick-table': 'type ip size 1024',
-                                 'option': option,
-                                 'timeout': {'client': '128m',
-                                             'server': '128m'},
-                                 'server': servers})
+                'bind': '*:13306',
+                'stick': 'on dst',
+                'stick-table': 'type ip size 1024',
+                'option': option,
+                'timeout': {'client': '128m',
+                            'server': '128m'},
+                'server': servers})
 
         # clustercheckuser allowed from localhost only
         util.bless_with_principal(h, [(self.name, 'clustercheckuser')])

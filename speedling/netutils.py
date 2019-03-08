@@ -1,6 +1,6 @@
-from speedling import localsh
 from collections import defaultdict
 
+from speedling import localsh
 
 # The full set net role ip maping is tbd
 # ideas: swift_replica, ceph_replica, controller_only, ip_tunneling, storage_data
@@ -12,6 +12,7 @@ from collections import defaultdict
 # neutron has usuable utils for this
 # isn't the socket module also able to tell this ? ,
 # these things are unpriv, but portability ?  ..
+
 
 def discover_default_route_src_addr():
     return localsh.ret(r""" PATH=$PATH:/usr/sbin

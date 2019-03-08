@@ -1,14 +1,12 @@
+import logging
 import os
 
-from speedling import facility
-from speedling import conf
-from speedling import localsh
-from speedling import cfgfile
-from speedling import util
 import speedling.tasks
-
-
-import logging
+from speedling import cfgfile
+from speedling import conf
+from speedling import facility
+from speedling import localsh
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -128,8 +126,8 @@ def task_ceph_mon(self):
         keyringer = util.rand_pick(inv_mons)
         ret = self.call_do(keyringer, self.initial_keyring)
         (admin_keyring, mon_bootstrap) = ret[next(iter(keyringer))]['return_value']
-        self.content_file(state_dir + '/ceph.client.admin.keyring', admin_keyring,
-                          owner=os.getuid(), group=os.getgid())
+        self.file_plain(state_dir + '/ceph.client.admin.keyring', admin_keyring,
+                        owner=os.getuid(), group=os.getgid())
         self.call_do(inv_mons, self.do_boostrap_mon, c_args=(mon_host_ips, fsid, mon_bootstrap, admin_keyring))
         for m in inv_mons:
             self.set_mon_bootsrapped(m)
@@ -171,13 +169,13 @@ class Ceph(facility.StorageBackend):
 
     def create_ceph_state_dirs(self, ):
         state_dir = self.get_state_dir()
-        self.ensure_path_exists(self.get_state_dir(),
-                                owner=os.getuid(),
-                                group=os.getgid())
+        self.file_path(self.get_state_dir(),
+                       owner=os.getuid(),
+                       group=os.getgid())
 
-        self.ensure_path_exists(state_dir + '/mon_bootstrap',
-                                owner=os.getuid(),
-                                group=os.getgid())
+        self.file_path(state_dir + '/mon_bootstrap',
+                       owner=os.getuid(),
+                       group=os.getgid())
 
     def is_mon_bootstrapped(self, mon_host):
         mon_state_dir = self.get_state_dir() + '/mon_bootstrap'
@@ -203,8 +201,8 @@ class Ceph(facility.StorageBackend):
             f.close()
         else:
             fsid = self.generate_fsid()
-            self.content_file(fsid_state, fsid,
-                              owner=os.getuid(), group=os.getgid())
+            self.file_plain(fsid_state, fsid,
+                            owner=os.getuid(), group=os.getgid())
             self.fsid = fsid
         return fsid
 
@@ -256,7 +254,7 @@ class Ceph(facility.StorageBackend):
             localsh.run("""
                 monmaptool --add {hostname} {ip} /tmp/monmap""".format(hostname=name,
                                                                        ip=ip))
-            self.ensure_path_exists(
+            self.file_path(
                 '/var/lib/ceph/mon/{cluster_name}-{hostname}'.format(
                     cluster_name=cluster_name, hostname=name),
                 owner='ceph', group='ceph')
@@ -265,9 +263,9 @@ class Ceph(facility.StorageBackend):
         self = facility.get_component(cname)
         cluster_name = 'ceph'
         # TODO: create/use file put
-        self.content_file('/tmp/ceph.mon.keyring', mon_bootstrap_keyring,
-                          owner='ceph')
-        self.content_file('/etc/ceph/ceph.client.admin.keyring', admin_keyring)
+        self.file_plain('/tmp/ceph.mon.keyring', mon_bootstrap_keyring,
+                        owner='ceph')
+        self.file_plain('/etc/ceph/ceph.client.admin.keyring', admin_keyring)
         this_hostname = self.get_this_node()['inv']['hostname']
 
         self.gen_monmap(mons, fsid)
@@ -275,8 +273,8 @@ class Ceph(facility.StorageBackend):
                      "--monmap /tmp/monmap "
                      "--keyring /tmp/ceph.mon.keyring").format(name=this_hostname))
 
-        self.content_file('/var/lib/ceph/mon/{cluster_name}-{hostname}.done'.format(
-                           cluster_name=cluster_name, hostname=this_hostname), '', owner='ceph')
+        self.file_plain('/var/lib/ceph/mon/{cluster_name}-{hostname}.done'.format(
+            cluster_name=cluster_name, hostname=this_hostname), '', owner='ceph')
         localsh.run(("systemctl enable ceph-mon@{host} && "
                      "systemctl start ceph-mon@{host}").format(host=this_hostname))
 
@@ -285,9 +283,9 @@ class Ceph(facility.StorageBackend):
         self.have_content()
         self = facility.get_component(cname)
         ceph_config = self.etc_ceph_ceph_conf(fsid=fsid, mons=mons)
-        self.ensure_path_exists('/etc/ceph', mode=0o755)  # all relaveant cli/srv nodes
+        self.file_path('/etc/ceph', mode=0o755)  # all relaveant cli/srv nodes
         ceph_local_conf = '/etc/ceph/' + self.name + '.conf'
-        self.ini_file_sync(ceph_local_conf, ceph_config, mode=0o644)
+        self.file_ini(ceph_local_conf, ceph_config, mode=0o644)
 
     def fetch_key(self, user, properties=dict()):
         props = ' '.join(("{cap} '{rule}'".format(cap=k, rule=v) for (k, v) in properties.items()))
@@ -298,8 +296,8 @@ class Ceph(facility.StorageBackend):
         this_hostname = self.get_this_inv()['hostname']
         key_dir_path = '/var/lib/ceph/mgr/ceph-' + this_hostname
         key_path = key_dir_path + '/keyring'
-        self.ensure_path_exists(key_dir_path, owner='ceph', group='ceph')
-        self.content_file(key_path, key, owner='ceph', group='ceph')
+        self.file_path(key_dir_path, owner='ceph', group='ceph')
+        self.file_plain(key_path, key, owner='ceph', group='ceph')
         localsh.run("""
 name={hostname}
 ln -s /usr/lib/systemd/system/ceph-mgr@.service /etc/systemd/system/ceph-mgr@$name.service
@@ -319,12 +317,12 @@ systemctl start ceph-mgr@$name
         # TODO: insecure, use posix acl or shared group, but it should not be world readable
         # consider more keys ..
         # we need to call to local cinder/nova to have_content before
-        self.content_file(target, key, owner='root', group='root', mode=0o644)
+        self.file_plain(target, key, owner='root', group='root', mode=0o644)
 
     def do_glance_keyring(cname, key):
         self = facility.get_component(cname)
         target = '/etc/ceph/ceph.client.glance.keyring'
-        self.content_file(target, key, owner='glance', group='glance', mode=0o640)
+        self.file_plain(target, key, owner='glance', group='glance', mode=0o640)
 
     # Ceph nowadays likes hostnames in the mon.conf
     # Non prod!
@@ -337,12 +335,12 @@ systemctl start ceph-mgr@$name
         cluster_name = 'ceph'
         # local not mounted, not formated osd on the root disk , just for demo !!!
         # OSD ID number is integer, should be continius allocation
-        self.ensure_path_exists('/srv/ceph', owner='ceph', group='ceph', mode=0o755)
-        self.ensure_path_exists('/srv/ceph/osd_0', owner='ceph', group='ceph')
+        self.file_path('/srv/ceph', owner='ceph', group='ceph', mode=0o755)
+        self.file_path('/srv/ceph/osd_0', owner='ceph', group='ceph')
         # NOTE: ceph-disk is deprecated
         localsh.run(("ceph-disk prepare --cluster '{cluster_name}' "
                      " --cluster-uuid '{fsid}'  /srv/ceph/osd_0 ").format(
-                        cluster_name=cluster_name, fsid=fsid))
+            cluster_name=cluster_name, fsid=fsid))
         localsh.run("""retry=0; while ! ceph-disk activate /srv/ceph/osd_0; do
                        ((retry++))
                        if [[ retry -ge 5 ]]; then

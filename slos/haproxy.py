@@ -1,10 +1,10 @@
-from speedling import facility
-from speedling import util
+import logging
+
 import speedling
 import speedling.tasks
-
+from speedling import facility
 from speedling import localsh
-import logging
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -87,8 +87,8 @@ class HAProxy(facility.LoadBalancer):
     def do_proxy(cname, cfg):
         self = facility.get_component(cname)
         self.have_content()
-        self.ensure_path_exists('/etc/systemd/system/haproxy.service.d')
-        self.ini_file_sync('/etc/systemd/system/haproxy.service.d/limits.conf',
-                           self.etc_systemd_system_haproxy_service_d_limits_conf())
-        self.haproxy_file('/etc/haproxy/haproxy.cfg', cfg)
+        self.file_path('/etc/systemd/system/haproxy.service.d')
+        self.file_ini('/etc/systemd/system/haproxy.service.d/limits.conf',
+                      self.etc_systemd_system_haproxy_service_d_limits_conf())
+        self.file_haproxy('/etc/haproxy/haproxy.cfg', cfg)
         localsh.run('systemctl daemon-reload && systemctl reload-or-restart haproxy')

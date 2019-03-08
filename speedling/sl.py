@@ -2,14 +2,12 @@
 
 import logging
 
-
-from speedling import receiver
-from speedling import control
-from speedling import inv
-from speedling import facility
-from speedling import util
 from speedling import conf
-
+from speedling import control
+from speedling import facility
+from speedling import inv
+from speedling import receiver
+from speedling import util
 
 UNIT_PREFIX = 'sl-'
 LOG = logging.getLogger(__name__)

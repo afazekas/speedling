@@ -1,19 +1,20 @@
-import threading
-import os.path
-import time
 import inspect
 import logging
+import os.path
+import threading
+import time
 from collections import abc
 from collections import defaultdict
-from speedling import cfgfile
-from speedling import localsh
-from speedling import util
-from speedling import conf
-from speedling import inv
-from speedling import pkgutils
-from speedling import piputils
-from speedling import gitutils
 from copy import deepcopy
+
+from speedling import cfgfile
+from speedling import conf
+from speedling import gitutils
+from speedling import inv
+from speedling import localsh
+from speedling import piputils
+from speedling import pkgutils
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ class Component(object):
     def get_addr_for(self, *args, **kwargs):
         return inv.get_addr_for(*args, **kwargs)
 
-    def ini_file_sync(self, target_path, paramters, *args, **kwargs):
+    def file_ini(self, target_path, paramters, *args, **kwargs):
         node = self.get_this_node()
         cfg_extend = node['cfg_extend']
         node_inv = node['inv']
@@ -235,23 +236,24 @@ class Component(object):
         self.changed['file'][target_path] = cfgfile.ini_file_sync(target_path, paramters,
                                                                   *args, **kwargs)
 
-    def content_file(self, target_path, *args, **kwargs):
+    def file_plain(self, target_path, *args, **kwargs):
         self.changed['file'][target_path] = cfgfile.content_file(target_path,
                                                                  *args, **kwargs)
+    # everything apperas on the fs is named as file
 
-    def ensure_path_exists(self, link, *args, **kwargs):
+    def file_path(self, link, *args, **kwargs):
         self.changed['file'][link] = cfgfile.ensure_path_exists(link, *args, **kwargs)
 
-    def haproxy_file(self, target_path,  *args, **kwargs):
+    def file_haproxy(self, target_path,  *args, **kwargs):
         self.changed['file'][target_path] = cfgfile.haproxy_file(target_path, *args, **kwargs)
 
-    def rabbit_file(self, target_path,  *args, **kwargs):
+    def file_rabbit(self, target_path,  *args, **kwargs):
         self.changed['file'][target_path] = cfgfile.rabbit_file(target_path, *args, **kwargs)
 
-    def install_file(self, target_path,  *args, **kwargs):
+    def file_install(self, target_path,  *args, **kwargs):
         self.changed['file'][target_path] = cfgfile.install_file(target_path, *args, **kwargs)
 
-    def ensure_sym_link(self,  target_path,  *args, **kwargs):
+    def file_sym_link(self,  target_path,  *args, **kwargs):
         self.changed['file'][target_path] = cfgfile.ensure_sym_link(target_path, *args, **kwargs)
 
     def etccfg_content(self, dry=None):
@@ -527,6 +529,7 @@ def compose():
     for c in REGISTERED_COMPONENTS.values():
         c.compose()
 
+
 task_sync_mutex = threading.Lock()
 pending = set()
 
@@ -577,9 +580,9 @@ def _taskify(*args):
 
 
 def log_pending():
-        task_sync_mutex.acquire()
-        LOG.info('Pending tasks:' + ', '.join((tsk.__name__ for tsk in pending)))
-        task_sync_mutex.release()
+    task_sync_mutex.acquire()
+    LOG.info('Pending tasks:' + ', '.join((tsk.__name__ for tsk in pending)))
+    task_sync_mutex.release()
 
 
 def start_pending():

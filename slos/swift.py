@@ -1,12 +1,11 @@
-from speedling import util
-from speedling import conf
-from speedling import tasks
-from speedling import facility
-
-from speedling import localsh
-from speedling import usrgrp
-
 import logging
+
+from speedling import conf
+from speedling import facility
+from speedling import localsh
+from speedling import tasks
+from speedling import usrgrp
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 sp = 'sl-'
@@ -113,7 +112,7 @@ class Swift(facility.OpenStack, facility.StorageBackend):
     # TODO: use secure key
     def etc_swift_container_sync_realms_conf(self):
         return {'realm1': {'key': 'realm1key',
-                'cluster_name1': 'http://' + conf.get_vip('public')['domain_name'] + ':8080/v1/'}}
+                           'cluster_name1': 'http://' + conf.get_vip('public')['domain_name'] + ':8080/v1/'}}
 
     def etc_swift_object_server_conf(self):
         object_ip = self.get_addr_for(self.get_this_inv(), 'backing_object',
@@ -151,12 +150,12 @@ class Swift(facility.OpenStack, facility.StorageBackend):
         super(Swift, self).etccfg_content()
         usrgrp.group('swift', 160)
         usrgrp.user('swift', 'swift')
-        self.ensure_path_exists('/etc/swift',
-                                owner='swift', group='swift')
+        self.file_path('/etc/swift',
+                       owner='swift', group='swift')
 
-        self.ini_file_sync('/etc/swift/swift.conf',
-                           self.etc_swift_swift_conf(),
-                           owner='swift', group='swift')
+        self.file_ini('/etc/swift/swift.conf',
+                      self.etc_swift_swift_conf(),
+                      owner='swift', group='swift')
         comp = facility.get_component('swift')
         if comp.deploy_source == 'src':
             util.unit_file(self.services['swift-account']['unit_name']['src'],
@@ -177,38 +176,38 @@ class Swift(facility.OpenStack, facility.StorageBackend):
 
         services = self.filter_node_enabled_services(self.services.keys())
         if 'swift-proxy' in services:
-            self.ini_file_sync('/etc/swift/proxy-server.conf',
-                               self.etc_swift_proxy_server_conf(),
-                               owner='swift', group='swift')
+            self.file_ini('/etc/swift/proxy-server.conf',
+                          self.etc_swift_proxy_server_conf(),
+                          owner='swift', group='swift')
 
         if 'swift-container' in services or 'swift-demo' in services:
-            self.ini_file_sync('/etc/swift/container-server.conf',
-                               self.etc_swift_container_server_conf(),
-                               owner='swift', group='swift')
+            self.file_ini('/etc/swift/container-server.conf',
+                          self.etc_swift_container_server_conf(),
+                          owner='swift', group='swift')
 
         if 'swift-proxy' in services or 'swift-container' in services:
-            self.ini_file_sync('/etc/swift/container-sync-realms.conf',
-                               self.etc_swift_container_sync_realms_conf(),
-                               owner='swift', group='swift')
+            self.file_ini('/etc/swift/container-sync-realms.conf',
+                          self.etc_swift_container_sync_realms_conf(),
+                          owner='swift', group='swift')
 
         if 'swift-object' in services or 'swift-demo' in services:
-            self.ini_file_sync('/etc/swift/object-server.conf',
-                               self.etc_swift_object_server_conf(),
-                               owner='swift', group='swift')
+            self.file_ini('/etc/swift/object-server.conf',
+                          self.etc_swift_object_server_conf(),
+                          owner='swift', group='swift')
 
         if 'swift-account' in services or 'swift-demo' in services:
-            self.ini_file_sync('/etc/swift/account-server.conf',
-                               self.etc_swift_account_server_conf(),
-                               owner='swift', group='swift')
+            self.file_ini('/etc/swift/account-server.conf',
+                          self.etc_swift_account_server_conf(),
+                          owner='swift', group='swift')
 
         if set(services).intersection(s_store):
-            self.ensure_path_exists('/srv/node', owner='swift', group='swift')
+            self.file_path('/srv/node', owner='swift', group='swift')
             # TODO use node config
-            self.ensure_path_exists('/srv/node/disk1',
-                                    owner='swift', group='swift')
-            self.ensure_path_exists('/var/lock/rsyncd',
-                                    owner='swift', group='swift')
-            # self.ini_file_sync('/etc/rsyncd.conf',
+            self.file_path('/srv/node/disk1',
+                           owner='swift', group='swift')
+            self.file_path('/var/lock/rsyncd',
+                           owner='swift', group='swift')
+            # self.file_ini('/etc/rsyncd.conf',
             #                   self.etc_rsyncd_conf(),
             #                   owner='root', group='swift', mode=0o644)
 
@@ -263,7 +262,7 @@ done
     def get_node_packages(self):
         pkgs = super(Swift, self).get_node_packages()
         pkgs.update({'curl', 'lib-dev\\erasurecode', 'memcached', 'lib-py3\\pyxattr',
-                    'srv-rsync\\rsyncd', 'sqlite', 'xfsprogs', 'lib-py2\\keystonemiddleware'})
+                     'srv-rsync\\rsyncd', 'sqlite', 'xfsprogs', 'lib-py2\\keystonemiddleware'})
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-swift'})
         return pkgs

@@ -1,10 +1,10 @@
-from speedling import facility
-from speedling import util
-from speedling import localsh
-import time
-
 import logging
+import time
 import urllib.parse
+
+from speedling import facility
+from speedling import localsh
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ class RabbitMQ(facility.Messaging):
         self.have_content()
         retry = 128
         # TODO: use state file, or vallet/key_mgr
-        self.content_file('/var/lib/rabbitmq/.erlang.cookie', 'NETTIQETJNDTXLRUSANA',
-                          owner='rabbitmq', mode=0o600)
+        self.file_plain('/var/lib/rabbitmq/.erlang.cookie', 'NETTIQETJNDTXLRUSANA',
+                        owner='rabbitmq', mode=0o600)
         while True:
             try:
                 if self.changed:  # TODO: rolling bounce
@@ -121,27 +121,27 @@ class RabbitMQ(facility.Messaging):
         return [c for c in candidates if ('rabbit@' + c) in r]
 
     def etc_systemd_system_rabbitmq_server_service_d_limits_conf(self, ): return {
-            'Service': {'LimitNOFILE': 16384}
-        }
+        'Service': {'LimitNOFILE': 16384}
+    }
 
     def etc_systemd_system_epmd_socket_d_ports_conf_ports_conf(self): return {
-            'Socket': {'ListenStream': ['', '[::]:4369']}
-        }
+        'Socket': {'ListenStream': ['', '[::]:4369']}
+    }
 
     def etccfg_content(self):
         super(RabbitMQ, self).etccfg_content()
         # TODO raise the connection backlog, minority stalls ..
-        # self.content_file('',
+        # self.file_plain('',
         #                     rabbit_conf, mode=0o644)
-        self.ensure_path_exists('/etc/systemd/system/rabbitmq-server.service.d')
-        self.ini_file_sync('/etc/systemd/system/rabbitmq-server.service.d/limits.conf',
-                           self.etc_systemd_system_rabbitmq_server_service_d_limits_conf())
-        self.rabbit_file('/etc/rabbitmq/rabbitmq.config', self.etc_rabbitmq_rabbitmq_config(),
+        self.file_path('/etc/systemd/system/rabbitmq-server.service.d')
+        self.file_ini('/etc/systemd/system/rabbitmq-server.service.d/limits.conf',
+                      self.etc_systemd_system_rabbitmq_server_service_d_limits_conf())
+        self.file_rabbit('/etc/rabbitmq/rabbitmq.config', self.etc_rabbitmq_rabbitmq_config(),
                          owner='rabbitmq', group='rabbitmq', mode=0o644)
         if util.get_distro()['family'] == 'suse':
-            self.ensure_path_exists('/etc/systemd/system/epmd.socket.d/ports.conf')
-            self.ini_file_sync('/etc/systemd/system/epmd.socket.d/ports.conf',
-                               self.etc_systemd_system_rabbitmq_server_service_d_limits_conf)
+            self.file_path('/etc/systemd/system/epmd.socket.d/ports.conf')
+            self.file_ini('/etc/systemd/system/epmd.socket.d/ports.conf',
+                          self.etc_systemd_system_rabbitmq_server_service_d_limits_conf)
 
     def get_peer_info(self):
         n = self.get_this_node()
@@ -157,7 +157,7 @@ class RabbitMQ(facility.Messaging):
                 hostname = node['inv']['hostname']
                 addr = self.get_addr_for(node['inv'], 'messaging')
                 self.peer_info.append({'hostname': hostname, 'addr': addr,
-                                      'port': port})
+                                       'port': port})
         for n in nodes:
             node = self.get_node(n)
             node['peers']['rabbitmq'] = self.peer_info

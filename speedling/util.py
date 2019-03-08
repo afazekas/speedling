@@ -1,15 +1,14 @@
 import collections
-from collections import abc
 import os
 import random
 import threading
+from collections import abc
 
 import speedling.keymgrs
 from speedling import cfgfile
-from speedling import pkgutils
 from speedling import conf
 from speedling import inv
-
+from speedling import pkgutils
 
 try:
     from shlex import quote as cmd_quote

@@ -1,9 +1,10 @@
-import threading
 import logging
-from speedling import localsh
+import threading
+
 from speedling import facility
 from speedling import gitutils
 from speedling import inv
+from speedling import localsh
 from speedling import pkgutils
 
 LOG = logging.getLogger(__name__)
@@ -113,12 +114,12 @@ def task_requirements():
 def register():
     # pseudo component for having git config
     component = {
-      'origin_repo': 'https://github.com/openstack/requirements.git',
-      'deploy_source': 'src',
-      'deploy_source_options': {'src'},
-      'component': 'requirements',
-      'pkg_deps': lambda: {'git'},
-      'goal': task_requirements,
+        'origin_repo': 'https://github.com/openstack/requirements.git',
+        'deploy_source': 'src',
+        'deploy_source_options': {'src'},
+        'component': 'requirements',
+        'pkg_deps': lambda: {'git'},
+        'goal': task_requirements,
     }
 
     facility.register_component(component)

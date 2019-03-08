@@ -1,15 +1,17 @@
 #!/usr/bin/python
-from keystoneclient.v3 import client as keystone_client
+import logging
+import os
+import time
+
+# keystone client depends on this library so it is not an extra
+import requests.structures
+
 from keystoneauth1 import session as keystone_session
+from keystoneclient.v3 import client as keystone_client
 
 # TODO: the client or server become slower in the past
 # years, time to reconsider the strategy
 
-# keystone client depends on this library so it is not an extra
-import requests.structures
-import time
-import logging
-import os
 
 LOG = logging.getLogger(__name__)
 # TODO: flavors, aggregates, neutron extnet, demo nets, meybe image remote sync
@@ -521,7 +523,7 @@ def endpoint_sync(auth, regions, endpoint_override=None, dry_run=False):
             if 'description' not in reg:
                 reg['description'] = ''
             # if you write none to keystone you get ''
-            if reg['description'] == None:
+            if reg['description'] is None:
                 reg['description'] = ''
             if name not in reg_dict:
                 if dry_run:
@@ -536,7 +538,7 @@ def endpoint_sync(auth, regions, endpoint_override=None, dry_run=False):
                 continue
             existing = reg_dict[name]
             if (existing.parent_region_id != reg['parent_region_id'] or
-               existing.description != reg['description']):
+                    existing.description != reg['description']):
                 if dry_run:
                     return True
                 keystone.regions.update(name,

@@ -1,14 +1,13 @@
-from speedling import util
-from speedling import conf
-from speedling import gitutils
-from speedling import tasks
-import speedling
-from speedling import facility
-
-from speedling import localsh
-from speedling import usrgrp
-
 import logging
+
+import speedling
+from speedling import conf
+from speedling import facility
+from speedling import gitutils
+from speedling import localsh
+from speedling import tasks
+from speedling import usrgrp
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 sp = 'sl-'
@@ -146,7 +145,7 @@ class Neutron(facility.OpenStack):
                 'mechanism_drivers': 'openvswitch,linuxbridge',
                 'extension_drivers': 'port_security'},
         'ml2_type_vxlan': {'vni_ranges': '1001:4001'}
-        }
+    }
 
     # vpnaas, consider other drivers
     def etc_neutron_vpn_agent_ini(self): return {
@@ -168,64 +167,64 @@ class Neutron(facility.OpenStack):
         usrgrp.group('neutron', 996)
         usrgrp.user('neutron', 'neutron')
         util.base_service_dirs('neutron')
-        self.ensure_path_exists('/etc/neutron/conf.d',
-                                owner='neutron', group='neutron')
-        self.ensure_path_exists('/etc/neutron/conf.d/common',
-                                owner='neutron', group='neutron')
-        self.ini_file_sync('/etc/neutron/conf.d/common/agent.conf',
-                           self.etc_neutron_conf_d_common_agent_conf(),
-                           owner='neutron', group='neutron')
+        self.file_path('/etc/neutron/conf.d',
+                       owner='neutron', group='neutron')
+        self.file_path('/etc/neutron/conf.d/common',
+                       owner='neutron', group='neutron')
+        self.file_ini('/etc/neutron/conf.d/common/agent.conf',
+                      self.etc_neutron_conf_d_common_agent_conf(),
+                      owner='neutron', group='neutron')
         neutron_git_dir = gitutils.component_git_dir(self)
         # consider alternate data paths
         # var/lib/neutron/dhcp needs to be reachable by the dnsmasq user
-        self.ensure_path_exists('/var/lib/neutron',
-                                owner='neutron', group='neutron',
-                                mode=0o755)
-        self.ensure_path_exists('/var/lib/neutron/lock',
-                                owner='neutron', group='neutron')
+        self.file_path('/var/lib/neutron',
+                       owner='neutron', group='neutron',
+                       mode=0o755)
+        self.file_path('/var/lib/neutron/lock',
+                       owner='neutron', group='neutron')
 
-        self.ensure_path_exists('/etc/neutron/plugins',
-                                owner='neutron', group='neutron')
-        self.ensure_path_exists('/etc/neutron/plugins/ml2',
-                                owner='neutron', group='neutron')
-        self.ini_file_sync('/etc/neutron/neutron.conf', self.etc_neutron_neutron_conf(),
-                           owner='neutron', group='neutron')
-        self.ensure_sym_link('/etc/neutron/plugin.ini',
-                             '/etc/neutron/plugins/ml2/ml2_conf.ini')
+        self.file_path('/etc/neutron/plugins',
+                       owner='neutron', group='neutron')
+        self.file_path('/etc/neutron/plugins/ml2',
+                       owner='neutron', group='neutron')
+        self.file_ini('/etc/neutron/neutron.conf', self.etc_neutron_neutron_conf(),
+                      owner='neutron', group='neutron')
+        self.file_sym_link('/etc/neutron/plugin.ini',
+                           '/etc/neutron/plugins/ml2/ml2_conf.ini')
         # move to common ?
-        self.ini_file_sync('/etc/neutron/plugins/ml2/ml2_conf.ini',
-                           self.etc_neutron_plugins_ml2_ml2_conf_ini(),
-                           owner='neutron', group='neutron')
+        self.file_ini('/etc/neutron/plugins/ml2/ml2_conf.ini',
+                      self.etc_neutron_plugins_ml2_ml2_conf_ini(),
+                      owner='neutron', group='neutron')
 
         services = self.filter_node_enabled_services(self.services.keys())
         if self.deploy_source == 'src':
             if services.intersection(q_srv - {'neutron-server'}):
-                self.content_file('/etc/sudoers.d/neutron', """Defaults:neutron !requiretty
+                self.file_plain('/etc/sudoers.d/neutron', """Defaults:neutron !requiretty
 neutron ALL = (root) NOPASSWD: /usr/bin/neutron-rootwrap /etc/neutron/rootwrap.conf *
 neutron ALL = (root) NOPASSWD: /usr/bin/neutron-rootwrap-daemon /etc/neutron/rootwrap.conf
 neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap /etc/neutron/rootwrap.conf *
 neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutron/rootwrap.conf
 """)
-                self.ensure_path_exists('/etc/neutron/rootwrap.d',
-                                        owner='root')
+                self.file_path('/etc/neutron/rootwrap.d',
+                               owner='root')
                 # TODO: exclude stuff based on config
                 for filter_file in ['debug.filters', 'dibbler.filters', 'ipset-firewall.filters',
                                     'l3.filters', 'netns-cleanup.filters', 'privsep.filters',
                                     'dhcp.filters', 'ebtables.filters', 'iptables-firewall.filters',
                                     'linuxbridge-plugin.filters', 'openvswitch-plugin.filters']:
 
-                    self.install_file('/etc/neutron/rootwrap.d/' + filter_file,
+                    self.file_install('/etc/neutron/rootwrap.d/' + filter_file,
                                       '/'.join((neutron_git_dir,
-                                               'etc/neutron/rootwrap.d', filter_file)),
+                                                'etc/neutron/rootwrap.d', filter_file)),
                                       mode=0o444)
-            self.install_file('/etc/neutron/rootwrap.conf',
+            self.file_install('/etc/neutron/rootwrap.conf',
                               '/'.join((neutron_git_dir,
-                                       'etc/rootwrap.conf')),
+                                        'etc/rootwrap.conf')),
                               mode=0o444)
 
-            self.install_file('/etc/neutron/api-paste.ini',
+            self.file_install('/etc/neutron/api-paste.ini',
                               '/'.join((neutron_git_dir,
-                                       'etc/api-paste.ini')),
+                                        'etc/api-paste.ini')),
                               mode=0o644,
                               owner='neutron', group='neutron')
             c_srv = self.services
@@ -260,39 +259,39 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
                            'neutron', requires=osrv, restart='on-failure')
 
         if 'neutron-metadata-agent' in services:
-            self.ini_file_sync('/etc/neutron/metadata_agent.ini',
-                               self.etc_neutron_metadata_agent_ini(),
-                               owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/metadata_agent.ini',
+                          self.etc_neutron_metadata_agent_ini(),
+                          owner='neutron', group='neutron')
 
         if 'neutron-vpn-agent' in services or 'neutron-l3-agent' in services:
-            self.ini_file_sync('/etc/neutron/l3_agent.ini', {
+            self.file_ini('/etc/neutron/l3_agent.ini', {
                 'DEFAULT': {'interface_driver': 'openvswitch',
                             'debug': True}
-                }, owner='neutron', group='neutron')
+            }, owner='neutron', group='neutron')
 
         if 'neutron-metering-agent' in services:
-            self.ini_file_sync('/etc/neutron/metering_agent.ini', {
+            self.file_ini('/etc/neutron/metering_agent.ini', {
                 'DEFAULT': {'interface_driver': 'openvswitch',
                             'debug': True}
-                }, owner='neutron', group='neutron')
+            }, owner='neutron', group='neutron')
 
         if 'neutron-vpn-agent' in services:
-            self.ini_file_sync('/etc/neutron/vpn_agent.ini',
-                               self.etc_neutron_vpn_agent_ini(),
-                               owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/vpn_agent.ini',
+                          self.etc_neutron_vpn_agent_ini(),
+                          owner='neutron', group='neutron')
 
         if 'neutron-dhcp-agent' in services:
-            self.ini_file_sync('/etc/neutron/dhcp_agent.ini', {
-                    'DEFAULT': {'interface_driver': 'openvswitch',
-                                'dnsmasq_local_resolv': True,
-                                'debug': True}
-                    }, owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/dhcp_agent.ini', {
+                'DEFAULT': {'interface_driver': 'openvswitch',
+                            'dnsmasq_local_resolv': True,
+                            'debug': True}
+            }, owner='neutron', group='neutron')
 
         if 'neutron-lbaasv2-agent' in services:
-            self.ini_file_sync('/etc/neutron/lbaas_agent.ini', {
-                                  'DEFAULT': {'interface_driver': 'openvswitch',
-                                              'debug': True}},
-                                  owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/lbaas_agent.ini', {
+                'DEFAULT': {'interface_driver': 'openvswitch',
+                            'debug': True}},
+                          owner='neutron', group='neutron')
 
         if 'neutron-openvswitch-agent' in services:
             tunnel_ip = self.get_addr_for(self.get_this_inv(), 'tunneling',
@@ -301,10 +300,10 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
             ovs = {'local_ip': tunnel_ip}
             if 'neutron-l3-agent' in services:
                 ovs['bridge_mappings'] = 'extnet:br-ex'
-            self.ini_file_sync('/etc/neutron/plugins/ml2/openvswitch_agent.ini', {
-                    'securitygroup': {'firewall_driver': 'iptables_hybrid'},
-                    'ovs': ovs,
-                    'agent': {'tunnel_types': 'vxlan'}},
+            self.file_ini('/etc/neutron/plugins/ml2/openvswitch_agent.ini', {
+                'securitygroup': {'firewall_driver': 'iptables_hybrid'},
+                'ovs': ovs,
+                'agent': {'tunnel_types': 'vxlan'}},
                 owner='neutron', group='neutron')
 
         # the inv version is not transfered, let it be part of the global config
@@ -314,21 +313,21 @@ neutron ALL = (root) NOPASSWD: /usr/local/bin/neutron-rootwrap-daemon /etc/neutr
         # we might want to update them even if they not present
         if ('neutron-lbaasv2-agent' in services or ('neutron-lbaasv2-agent' in global_service_union and
                                                     'neutron-server' in services)):
-            self.ini_file_sync('/etc/neutron/neutron_lbaas.conf', {
-                               'service_providers': {'service_provider':
-                                                     'LOADBALANCERV2:Haproxy:' +
-                                                     'neutron_lbaas.drivers.haproxy.plugin_driver.HaproxyOnHostPluginDriver' +
-                                                     ':default'}}, owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/neutron_lbaas.conf', {
+                'service_providers': {'service_provider':
+                                      'LOADBALANCERV2:Haproxy:' +
+                                      'neutron_lbaas.drivers.haproxy.plugin_driver.HaproxyOnHostPluginDriver' +
+                                      ':default'}}, owner='neutron', group='neutron')
         if ('neutron-vpn-agent' in services or ('neutron-vpn-agent' in global_service_union and
                                                 'neutron-server' in services)):
-            self.ini_file_sync('/etc/neutron/neutron_vpnaas.conf',
-                               self.etc_neutron_neutron_vpnaas_conf(),
-                               owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/neutron_vpnaas.conf',
+                          self.etc_neutron_neutron_vpnaas_conf(),
+                          owner='neutron', group='neutron')
 
         if 'neutron-fwaas' in global_service_union:
-            self.ini_file_sync('/etc/neutron/fwaas_driver.ini',
-                               self.etc_neutron_fwaas_driver_ini(),
-                               owner='neutron', group='neutron')
+            self.file_ini('/etc/neutron/fwaas_driver.ini',
+                          self.etc_neutron_fwaas_driver_ini(),
+                          owner='neutron', group='neutron')
 
     def do_dummy_public_net(cname):
         # guest net hack

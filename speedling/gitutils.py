@@ -1,13 +1,13 @@
 # temporary stuff, it will work completly differently
-import threading
-import subprocess
-import os
 import errno
 import logging
+import os
+import subprocess
+import threading
 import urllib.parse
-from speedling import pkgutils
 
 from speedling import localsh
+from speedling import pkgutils
 
 LOG = logging.getLogger(__name__)
 

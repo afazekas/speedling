@@ -1,13 +1,11 @@
-from speedling import util
-from speedling import conf
-from speedling import facility
-from speedling import tasks
-from speedling import gitutils
-
-from speedling import usrgrp
-
 import logging
 
+from speedling import conf
+from speedling import facility
+from speedling import gitutils
+from speedling import tasks
+from speedling import usrgrp
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -64,23 +62,23 @@ class Glance(facility.OpenStack):
         if 'haproxy' in gconf['global_service_flags']:
             bind_port = 19292
         return {
-                'DEFAULT': {'debug': True,
-                            'bind_port': bind_port,
-                            'show_image_direct_url': True,
-                            'show_multiple_locations': True,
-                            'enabled_backends': ', '.join(d['sname'] for d in self.backends)},
-                'glance_store': {'default_backend': self.backends[0]['sname'].split(':')[0]},
-                'keystone_authtoken': self.keystone.authtoken_section('glance'),
-                'paste_deploy': {'flavor': 'keystone'},
-                'database': {'connection': self.sql.db_url('glance')}
-            }
+            'DEFAULT': {'debug': True,
+                        'bind_port': bind_port,
+                        'show_image_direct_url': True,
+                        'show_multiple_locations': True,
+                        'enabled_backends': ', '.join(d['sname'] for d in self.backends)},
+            'glance_store': {'default_backend': self.backends[0]['sname'].split(':')[0]},
+            'keystone_authtoken': self.keystone.authtoken_section('glance'),
+            'paste_deploy': {'flavor': 'keystone'},
+            'database': {'connection': self.sql.db_url('glance')}
+        }
 
     def etc_glance_glance_registry_conf(self): return {
-                'DEFAULT': {'debug': True},
-                'keystone_authtoken': self.keystone.authtoken_section('glance'),
-                'paste_deploy': {'flavor': 'keystone'},
-                'database': {'connection': self.sql.db_url('glance')}
-            }
+        'DEFAULT': {'debug': True},
+        'keystone_authtoken': self.keystone.authtoken_section('glance'),
+        'paste_deploy': {'flavor': 'keystone'},
+        'database': {'connection': self.sql.db_url('glance')}
+    }
 
     def etccfg_content(self):
         super(Glance, self).etccfg_content()
@@ -88,39 +86,39 @@ class Glance(facility.OpenStack):
         usrgrp.group('glance', 161)
         usrgrp.user('glance', 'glance')
         util.base_service_dirs('glance')
-        self.ensure_path_exists('/var/lib/glance/images',
-                                owner='glance', group='glance')
-        self.ensure_path_exists('/var/lib/glance/image-cache',
-                                owner='glance', group='glance')
+        self.file_path('/var/lib/glance/images',
+                       owner='glance', group='glance')
+        self.file_path('/var/lib/glance/image-cache',
+                       owner='glance', group='glance')
 
         if 'glance-api' in services:
-            self.ini_file_sync('/etc/glance/glance-api.conf',
-                               self.etc_glance_glance_api_conf(),
-                               owner='glance', group='glance')
+            self.file_ini('/etc/glance/glance-api.conf',
+                          self.etc_glance_glance_api_conf(),
+                          owner='glance', group='glance')
         if 'glance-registry' in services:
-            self.ini_file_sync('/etc/glance/glance-registry.conf',
-                               self.etc_glance_glance_registry_conf(),
-                               owner='glance', group='glance')
+            self.file_ini('/etc/glance/glance-registry.conf',
+                          self.etc_glance_glance_registry_conf(),
+                          owner='glance', group='glance')
         # in case of packages or containers expect it is there already
         comp = self
         if comp.deploy_source == 'src':
             glance_git_dir = gitutils.component_git_dir(comp)
 
-            self.ensure_sym_link('/etc/glance/metadefs', glance_git_dir + '/etc/metadefs')
+            self.file_sym_link('/etc/glance/metadefs', glance_git_dir + '/etc/metadefs')
 
-            self.install_file('/etc/glance/glance-api-paste.ini',
+            self.file_install('/etc/glance/glance-api-paste.ini',
                               '/'.join((glance_git_dir,
-                                       'etc/glance-api-paste.ini')),
+                                        'etc/glance-api-paste.ini')),
                               mode=0o644,
                               owner='glance', group='glance')
-            self.install_file('/etc/glance/glance-registry-paste.ini',
+            self.file_install('/etc/glance/glance-registry-paste.ini',
                               '/'.join((glance_git_dir,
-                                       'etc/glance-registry-paste.ini')),
+                                        'etc/glance-registry-paste.ini')),
                               mode=0o644,
                               owner='glance', group='glance')
-            self.install_file('/etc/glance/policy.json',
+            self.file_install('/etc/glance/policy.json',
                               '/'.join((glance_git_dir,
-                                       'etc/policy.json')),
+                                        'etc/policy.json')),
                               mode=0o644,
                               owner='glance', group='glance')
 
@@ -169,11 +167,11 @@ class Glance(facility.OpenStack):
         gconf = conf.get_global_config()
         if 'haproxy' in gconf['global_service_flags']:
             self.haproxy.add_listener('glance', {
-                                 'bind': '*:' + str(glance_port),
-                                 'mode': 'http',
-                                 'http-request': ['set-header X-Forwarded-Proto https if { ssl_fc }',
-                                                  'set-header X-Forwarded-Proto http if !{ ssl_fc }'],
-                                 'server': servers})
+                'bind': '*:' + str(glance_port),
+                'mode': 'http',
+                'http-request': ['set-header X-Forwarded-Proto https if { ssl_fc }',
+                                 'set-header X-Forwarded-Proto http if !{ ssl_fc }'],
+                'server': servers})
 
         self.keystone.register_endpoint_tri(region=dr,
                                             name='glance',

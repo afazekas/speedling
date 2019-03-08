@@ -1,12 +1,12 @@
-from speedling import util
+import logging
+
+import speedling.tasks
 from speedling import conf
 from speedling import facility
 from speedling import gitutils
 from speedling import localsh
 from speedling import usrgrp
-import speedling.tasks
-
-import logging
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 
@@ -133,11 +133,11 @@ class Keystone(facility.OpenStack):
                     util.cmd_quote(util.get_keymgr()(self.name, 'admin@default')))
 
     def etc_keystone_keystone_conf(self): return {
-            'DEFAULT': {'debug': True},
-            'database': {'connection': self.sql.db_url('keystone')},
-            'token': {'provider': 'fernet'},
-            'cache': {'backend': 'dogpile.cache.memcached'}  # TODO: non local memcachedS
-            }
+        'DEFAULT': {'debug': True},
+        'database': {'connection': self.sql.db_url('keystone')},
+        'token': {'provider': 'fernet'},
+        'cache': {'backend': 'dogpile.cache.memcached'}  # TODO: non local memcachedS
+    }
 
     def etc_httpd_conf_d_wsgi_keystone_conf(self):
         srv_name = 'httpd' if util.get_distro()['family'] == 'redhat' else 'apache2'
@@ -197,11 +197,11 @@ Listen 35357
         keystone_git_dir = gitutils.component_git_dir(self)
         usrgrp.group('keystone', 163)
         usrgrp.user('keystone', 'keystone', home=keystone_git_dir)
-        self.ensure_path_exists('/etc/keystone',
-                                owner='keystone', group='keystone')
-        self.ini_file_sync('/etc/keystone/keystone.conf',
-                           self.etc_keystone_keystone_conf(),
-                           owner='keystone', group='keystone')
+        self.file_path('/etc/keystone',
+                       owner='keystone', group='keystone')
+        self.file_ini('/etc/keystone/keystone.conf',
+                      self.etc_keystone_keystone_conf(),
+                      owner='keystone', group='keystone')
         distro = util.get_distro()['family']
 
         if distro == 'debian':
@@ -212,9 +212,9 @@ Listen 35357
         else:  # redhat familiy and this is expected in more distros
             cfg_dir = '/etc/httpd/conf.d'
 
-        self.content_file(cfg_dir + '/wsgi-keystone.conf',
-                          self.etc_httpd_conf_d_wsgi_keystone_conf(),
-                          mode=0o644)
+        self.file_plain(cfg_dir + '/wsgi-keystone.conf',
+                        self.etc_httpd_conf_d_wsgi_keystone_conf(),
+                        mode=0o644)
 
     def get_node_packages(self):
         pkgs = super(Keystone, self).get_node_packages()

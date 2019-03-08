@@ -1,12 +1,12 @@
-from speedling import util
-from speedling import tasks
-from speedling import facility
+import logging
+
 from speedling import conf
+from speedling import facility
 from speedling import gitutils
 from speedling import localsh
+from speedling import tasks
 from speedling import usrgrp
-
-import logging
+from speedling import util
 
 LOG = logging.getLogger(__name__)
 sp = 'sl-'
@@ -178,9 +178,9 @@ class Nova(facility.OpenStack):
         pv = conf.get_vip('public')['domain_name']
         neutron_section = self.keystone.authtoken_section('neutron_for_nova')
         neutron_section.update(
-                 {'service_metadata_proxy': True,
-                  'metadata_proxy_shared_secret': util.get_keymgr()([self, self.networking],
-                                                                    'neutron_nova_metadata')})  # add dual suffix
+            {'service_metadata_proxy': True,
+             'metadata_proxy_shared_secret': util.get_keymgr()([self, self.networking],
+                                                               'neutron_nova_metadata')})  # add dual suffix
         if util.get_keymanager().has_creds(self.keystone.name, 'placement@default'):
             placement_section = self.keystone.authtoken_section('placement')
         else:
@@ -226,26 +226,26 @@ class Nova(facility.OpenStack):
         usrgrp.group('nova', 162)
         usrgrp.user('nova', 'nova', ['libvirt'])
         util.base_service_dirs('nova')
-        self.ensure_path_exists('/etc/nova/rootwrap.d',
-                                owner='nova', group='nova')
-        self.ensure_path_exists('/var/lib/nova/instances',
-                                owner='nova', group='nova')
+        self.file_path('/etc/nova/rootwrap.d',
+                       owner='nova', group='nova')
+        self.file_path('/var/lib/nova/instances',
+                       owner='nova', group='nova')
 
-        self.ini_file_sync('/etc/nova/nova.conf', self.etc_nova_nova_conf(),
-                           owner='nova', group='nova')
+        self.file_ini('/etc/nova/nova.conf', self.etc_nova_nova_conf(),
+                      owner='nova', group='nova')
         # test_only not recommended as stand alone
         util.unit_file(self.services['nova-placement-api']['unit_name'][self.deploy_source],
                        '/usr/local/bin/nova-placement-api  --port 8780',
                        'nova')
         if self.deploy_source == 'src':
-            self.install_file('/etc/nova/api-paste.ini',
+            self.file_install('/etc/nova/api-paste.ini',
                               '/'.join((nova_git_dir,
-                                       'etc/nova/api-paste.ini')),
+                                        'etc/nova/api-paste.ini')),
                               mode=0o644,
                               owner='nova', group='nova')
-            self.install_file('/etc/nova/rootwrap.conf',
+            self.file_install('/etc/nova/rootwrap.conf',
                               '/'.join((nova_git_dir,
-                                       'etc/nova/rootwrap.conf')),
+                                        'etc/nova/rootwrap.conf')),
                               mode=0o444)
             util.unit_file(self.services['nova-api']['unit_name']['src'],
                            '/usr/local/bin/nova-api',
@@ -294,13 +294,13 @@ class Nova(facility.OpenStack):
                            'nova')
         services = self.filter_node_enabled_services(self.services.keys())
         if 'nova-api' in services or 'nova-metadata' in services:
-            self.install_file('/etc/nova/rootwrap.d/api-metadata.filters',
+            self.file_install('/etc/nova/rootwrap.d/api-metadata.filters',
                               '/'.join((nova_git_dir,
-                                       'etc/nova/rootwrap.d/api-metadata.filters')),
+                                        'etc/nova/rootwrap.d/api-metadata.filters')),
                               mode=0o444)
         # intersect
         if 'nova-api' in services or 'nova-metadata' in services or 'nova-compute' in services:
-            self.content_file('/etc/sudoers.d/nova', """Defaults:nova !requiretty
+            self.file_plain('/etc/sudoers.d/nova', """Defaults:nova !requiretty
 nova ALL = (root) NOPASSWD: /usr/bin/nova-rootwrap /etc/nova/rootwrap.conf *
 nova ALL = (root) NOPASSWD: /usr/local/bin/nova-rootwrap /etc/nova/rootwrap.conf *
 nova ALL = (root) NOPASSWD: /usr/bin/privsep-helper *
@@ -311,17 +311,17 @@ nova ALL = (root) NOPASSWD: /usr/local/bin/privsep-helper *
             usrgrp.group('nova_migration', 983)
             usrgrp.user('nova_migration', 'nova_migration')  # TODO: give shell, distribute keys
 
-            self.ensure_path_exists('/etc/nova/migration',
-                                    owner='nova', group='nova')
-            self.ensure_path_exists('/etc/nova/migration/rootwrap.d',
-                                    owner='nova', group='nova')
+            self.file_path('/etc/nova/migration',
+                           owner='nova', group='nova')
+            self.file_path('/etc/nova/migration/rootwrap.d',
+                           owner='nova', group='nova')
             if self.deploy_source == 'src':
-                self.content_file('/etc/sudoers.d/nova_migration', """Defaults:nova_migration !requiretty
+                self.file_plain('/etc/sudoers.d/nova_migration', """Defaults:nova_migration !requiretty
 
 nova_migration ALL = (nova) NOPASSWD: /usr/bin/nc -U /var/run/libvirt/libvirt-sock
 nova_migration ALL = (root) NOPASSWD: /usr/bin/nova-rootwrap /etc/nova/migration/rootwrap.conf *
 """)
-                self.content_file("/etc/nova/migration/rootwrap.d/cold_migrations.filters", """[Filters]
+                self.file_plain("/etc/nova/migration/rootwrap.d/cold_migrations.filters", """[Filters]
 create_file: PathFilter, /usr/bin/touch, nova, /var/lib/nova/instances/
 remove_file: PathFilter, /usr/bin/rm, nova, /var/lib/nova/instances/
 create_dir: PathFilter, /usr/bin/mkdir, nova, -p, /var/lib/nova/instances/
@@ -331,21 +331,21 @@ copy_file_remote_to_local_recursive: PathFilter, /usr/bin/scp, nova, -r, -f, /va
 copy_file_local_to_remote: PathFilter, /usr/bin/scp, nova, -t, /var/lib/nova/instances/
 copy_file_remote_to_local: PathFilter, /usr/bin/scp, nova, -f, /var/lib/nova/instances/
 """)
-                self.content_file("/etc/nova/migration/rootwrap.conf", """[DEFAULT]
+                self.file_plain("/etc/nova/migration/rootwrap.conf", """[DEFAULT]
 use_syslog=True
 syslog_log_facility=syslog
 syslog_log_level=ERROR
 filters_path=/etc/nova/migration/rootwrap.d
 """)
 
-                self.install_file('/etc/nova/rootwrap.d/compute.filters',
+                self.file_install('/etc/nova/rootwrap.d/compute.filters',
                                   '/'.join((nova_git_dir,
-                                           'etc/nova/rootwrap.d/compute.filters')),
+                                            'etc/nova/rootwrap.d/compute.filters')),
                                   mode=0o444)
                 # nova-net only ??, try to delete
-                self.install_file('/etc/nova/rootwrap.d/network.filters',
+                self.file_install('/etc/nova/rootwrap.d/network.filters',
                                   '/'.join((nova_git_dir,
-                                           'etc/nova/rootwrap.d/network.filters')),
+                                            'etc/nova/rootwrap.d/network.filters')),
                                   mode=0o444)
 
     def do_cell_reg(cname):

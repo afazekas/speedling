@@ -1,5 +1,5 @@
-import subprocess
 import logging
+import subprocess
 import threading
 import time
 
@@ -124,7 +124,7 @@ def run_log(cmd, single=False):
     else:
         u_stderr = ''
     return (r, """{cmd}\nreturned_with:{ret}\n{u_stdout}{u_stderr}""".format(
-              cmd=cmd, ret=r, u_stdout=u_stdout, u_stderr=u_stderr))
+        cmd=cmd, ret=r, u_stdout=u_stdout, u_stderr=u_stderr))
 
 
 def test(cmd, single=False):

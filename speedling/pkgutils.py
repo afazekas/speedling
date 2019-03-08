@@ -1,7 +1,8 @@
-import threading
 import logging
-from speedling import localsh
+import threading
+
 from speedling import conf
+from speedling import localsh
 from speedling import util
 
 LOG = logging.getLogger(__name__)
@@ -151,6 +152,7 @@ else
 fi
 """)
     return pkg_mgr.strip()
+
 
 PKG_MANAGER = None
 

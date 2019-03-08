@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-import os
-import queue
-import threading
-import select
+import grp
 import logging
-import traceback
+import numbers
+import os
 import pickle
-
 # TODO: move the dependent function elsewhere
 import pwd
-import grp
-import numbers
+import queue
+import select
+import threading
+import traceback
 
 INPUTFD = 4
 OUTPUTFD = 5
@@ -52,8 +51,8 @@ class stream_reader(object):
 # test only
 def file_writer(stream, path, owner='root', group='root', mode=0o640):
     f = os.fdopen(os.open(path,
-                  os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                  mode), 'wb')
+                          os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                          mode), 'wb')
     # for early failure, put it into the front
     if isinstance(owner, numbers.Integral):
         uid = owner

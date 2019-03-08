@@ -1,14 +1,12 @@
 import ipaddress
+import logging
+from collections import abc
 
+from speedling import conf
 from speedling import control
 from speedling import facility
-import logging
-
-from collections import abc
-from speedling import conf
-
-from speedling import netutils
 from speedling import localsh
+from speedling import netutils
 
 LOG = logging.getLogger(__name__)
 
@@ -267,7 +265,7 @@ def address_return(pourpose, addresses):
     selected = next(iter(addresses))
     if len(addresses) > 1:
         LOG.warning('Multiple address found for {pourpose} picking {addr} from {addrs}'.format(addr=selected,
-                    addrs=str(addresses), pourpose=pourpose))
+                                                                                               addrs=str(addresses), pourpose=pourpose))
     return selected
 
 

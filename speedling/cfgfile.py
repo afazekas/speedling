@@ -1,17 +1,18 @@
 import contextlib
 import errno
-import re
+import grp  # getent groups
+import logging
+import numbers
 import os
+import pwd  # getent passwd
+import re
 import stat
+import uuid
+
 try:
     from collections import abc
 except:
     import collections as abc
-import pwd  # getent passwd
-import grp  # getent groups
-import numbers
-import logging
-import uuid
 
 LOG = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _section_to_str(name, section_dict):
     else:
         sec_str = ''
     return sec_str + ''.join((_key_value_to_str(key,
-                              section_dict[key]) for
+                                                section_dict[key]) for
                               key in keys))
 
 
@@ -114,25 +115,25 @@ def ini_gen(target_path, paramters, owner='root', group='root', mode=0o640,
     # most of these lines are not matching to the regex
     current_section = None
     for l in template_file_content:
-            fc = l[0]
-            if fc == '#':
-                m = SECTION_ARG_ANCHOR.match(l)
-                if (m):
-                    k_t = (current_section, m.group(1))
-                    arg_to_pos[k_t] = len(filtered_template)
-                filtered_template.append(l)
+        fc = l[0]
+        if fc == '#':
+            m = SECTION_ARG_ANCHOR.match(l)
+            if (m):
+                k_t = (current_section, m.group(1))
+                arg_to_pos[k_t] = len(filtered_template)
+            filtered_template.append(l)
+            continue
+        # remove all non section name or comment part
+        if fc == '[':
+            m = SECTION_NAME_RE.match(l)
+            if not m:
                 continue
-            # remove all non section name or comment part
-            if fc == '[':
-                m = SECTION_NAME_RE.match(l)
-                if not m:
-                    continue
-                current_section = m.group(1)
-                section_offset[current_section] = len(filtered_template)
-                filtered_template.append(l)
-                continue
-            if fc in VALID_OTHER_START:
-                filtered_template.append(l)
+            current_section = m.group(1)
+            section_offset[current_section] = len(filtered_template)
+            filtered_template.append(l)
+            continue
+        if fc in VALID_OTHER_START:
+            filtered_template.append(l)
 
     new_section = {}
     insert_after = []
@@ -146,10 +147,10 @@ def ini_gen(target_path, paramters, owner='root', group='root', mode=0o640,
             ins_str = _key_value_to_str(key, keys[key])
             if pair in arg_to_pos:
                 insert_after.append((arg_to_pos[pair],
-                                    ins_str))
+                                     ins_str))
             else:
                 insert_after.append((section_offset[section],
-                                    ins_str))
+                                     ins_str))
     insert_after = sorted(insert_after, reverse=True)
     generated_lines = list(filtered_template)  # just rename?
 
@@ -258,7 +259,7 @@ def ensure_path_exists(target_path, mode=0o750, owner='root', group='root',
     original_stat = os.lstat(target_path)
     # repeated pattern , function ?
     if (original_stat[stat.ST_UID] != uid or
-       original_stat[stat.ST_GID] != gid):
+            original_stat[stat.ST_GID] != gid):
         os.chown(target_path, uid, gid)
         changed = True
     if (stat.S_IMODE(original_stat[stat.ST_MODE]) != mode):

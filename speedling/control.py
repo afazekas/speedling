@@ -1,22 +1,22 @@
-import subprocess
-import threading
-import os.path
-import io
-import tempfile
-import logging
-import uuid
 import atexit
-import queue
 import errno
-import pickle
-import shutil
+import io
+import logging
 import mmap
+import os.path
+import pickle
+import queue
+import shutil
+import subprocess
+import tempfile
+import threading
 import types
+import uuid
 from collections import abc
 from shlex import quote
-from speedling import conf
 
 import __main__
+from speedling import conf
 
 # temporary solution with threading,
 # most of the locaed opt can be considered atomic in python so likely we can work with less lock
@@ -266,7 +266,7 @@ def init_connection(host, host_address=None, user=None, ssh_args=None):
     main_loc = __main__.__file__.split(os.path.sep)
     main_py = os.sep.join(main_loc[-2:])
     args = ['ssh', user_part + host_address, ] + ssh_args + [
-            """read a; workdir=`mktemp -d`; cd "$workdir"; dd iflag=fullblock bs="$a" count=1 2>/dev/null |
+        """read a; workdir=`mktemp -d`; cd "$workdir"; dd iflag=fullblock bs="$a" count=1 2>/dev/null |
 tar xz; sudo bash -c 'exec 4>&0 ; exec 5>&1 ; exec 6>&2; PYTHONPATH=. exec python3 {main} -r -I "{host}" </dev/null  &>"$workdir"/worker.out'""".format(host=host, main=main_py)]
 
     # will it be zombiee without wait or communicate call ?

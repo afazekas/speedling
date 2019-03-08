@@ -1,10 +1,9 @@
-from speedling import inv
-from speedling import facility
-from speedling import localsh
-from speedling import cfgfile
-
 import logging
 
+from speedling import cfgfile
+from speedling import facility
+from speedling import inv
+from speedling import localsh
 
 LOG = logging.getLogger(__name__)
 

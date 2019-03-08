@@ -8,10 +8,10 @@ SECTION_NAME_RE = re.compile('\[(.*)\][ \t\r\n]+')
 
 
 def _parse_value(v):
-        try:
-            return ast.literal_eval(v)
-        except (ValueError, SyntaxError):
-            return v.strip()
+    try:
+        return ast.literal_eval(v)
+    except (ValueError, SyntaxError):
+        return v.strip()
 
 
 # not bug compatible,
@@ -93,7 +93,7 @@ def parse_ansible_invetory_ini(source):
         'group_var': group_vars,
         'host_in_group': {k: set(v) for k, v in host_in_group.items()},
         'inherit_from': inherit_from
-     }
+    }
 
 
 # the dynamic invetory uses json format
@@ -148,7 +148,7 @@ def parse_ansible_invetory(source, use_yaml='auto'):
         'group_var': group_vars,
         'host_in_group': {k: set(v) for k, v in host_in_group.items()},
         'inherit_from': inherit_from
-     }
+    }
 
 
 if '__main__' == __name__:
