@@ -349,7 +349,7 @@ def do_retrycmd_after_content(cname, cmd):
     while True:
         try:
             localsh.run(cmd)
-        except:
+        except Exception:
             if retry == 0:
                 raise
         else:
@@ -559,7 +559,7 @@ def _taskify(*args):
                         if hasattr(t, 'wants'):  # exrta deps as task attibute
                             task_wants(*t.wants, caller_name=t.__name__)
                         t()
-                    except:
+                    except BaseException:
                         FAILED.append(t)
                         t.failed = True
                         LOG.error(t.__name__ + ' failed in ' + str(time.time() - start) + 's (waits included)')
@@ -626,4 +626,4 @@ def task_wants(*args, caller_name=None):
         wf.thr.join()
     for task in args:  # late fail, we do not want to interrupt the world
         if task.failed:
-            raise Exception('Aborting %s because %s failed' % (caller_name, task.__name__))
+            raise util.TaskAbort('Aborting %s because %s failed' % (caller_name, task.__name__))

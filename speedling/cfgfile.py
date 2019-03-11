@@ -11,7 +11,7 @@ import uuid
 
 try:
     from collections import abc
-except:
+except ImportError:
     import collections as abc
 
 LOG = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ def ini_gen(target_path, paramters, owner='root', group='root', mode=0o640,
     try:
         for sec in sections:
             generated_lines.append(_section_to_str(sec, new_section[sec]))
-    except:
+    except Exception:
         LOG.error('section: %s' % (sec))
         raise
 

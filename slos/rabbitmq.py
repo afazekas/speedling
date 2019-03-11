@@ -74,7 +74,7 @@ class RabbitMQ(facility.Messaging):
                     action = 'start'
                 localsh.run("systemctl {} rabbitmq-server".format(action))
                 break
-            except:
+            except util.NonZeroExitCode:
                 LOG.warn('Check the RABBIT systemd deps!')
                 time.sleep(0.5)
                 if not retry:

@@ -198,7 +198,7 @@ class PKGMGR(object):
             try:
                 localsh.run(cls.install_cmd + ' '.join(pkgs))
                 retry = 0
-            except:
+            except Exception:
                 retry -= 1
                 if not retry:
                     raise
@@ -211,7 +211,7 @@ class PKGMGR(object):
             try:
                 localsh.run(cls.update_cmd)
                 retry = 0
-            except:
+            except Exception:
                 retry -= 1
                 if not retry:
                     raise

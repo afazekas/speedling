@@ -1,6 +1,6 @@
 try:
     import anyjson as json
-except:
+except ImportError:
     import json
 
 import errno

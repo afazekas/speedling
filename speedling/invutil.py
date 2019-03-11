@@ -108,7 +108,7 @@ def parse_ansible_invetory(source, use_yaml='auto'):
         try:
             skel = json.load(stream)
             use_yaml = False
-        except:
+        except Exception:
             if use_yaml == 'auto':
                 use_yaml = True
     if use_yaml is True:

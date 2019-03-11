@@ -226,12 +226,12 @@ def is_ipaddr(addr):
     try:
         ipaddress.IPv4Address(addr)
         return True
-    except:
+    except Exception:
         pass
     try:
         ipaddress.IPv6Address(addr)
         return True
-    except:
+    except Exception:
         pass
     return False
 

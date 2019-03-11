@@ -9,12 +9,12 @@ import json
 import os
 import os.path
 import pwd
-import re
 import sys
 import uuid
 import xml.etree.ElementTree as ET
-from collections import OrderedDict
+import functools
 from collections import defaultdict
+import ipaddress
 
 import libvirt
 import yaml
@@ -26,6 +26,8 @@ from speedling import fetch
 from speedling import localsh
 from speedling import netutils
 from speedling import util
+
+import xmlvirt
 
 try:
     from shlex import quote as cmd_quote
@@ -46,180 +48,30 @@ except ImportError:
 
 # TODO kill ssh DNS , kill requiretty (both my image and cloud init)
 
-DATA_PATH = '/srv/virtbs'
-FETCH_PATH = os.path.join(DATA_PATH, 'downloads')
-FLOATING_IMAGES = os.path.join(DATA_PATH, 'library')
-BASE_IMG_PATH = os.path.join(DATA_PATH, '_base')  # raw, sparse
+SSH_PUBLIC_KEY_LIST_PATH_REL = '/id_rsa.pub'  # ro file, can have multiple keys
 
-LIVE_ROOT_PATH = os.path.join(DATA_PATH, 'live')  # live root disks,
-
-CONFIG_DRIVE_PATH = os.path.join(DATA_PATH, 'cd')
-
-# unconfined_u:object_r:virt_log_t:s0
-LOG_PATH = os.path.join(DATA_PATH, 'log')
-
-KEYS_PATH = os.path.join(DATA_PATH, 'keys')
-
-HOME_PATH = os.environ.get('HOME', '/root')
-
-SSH_PUBLIC_KEY_LIST_PATH = KEYS_PATH + '/id_rsa.pub'  # ro file, can have multiple keys
-
-SSH_PRIVATE_KEY_PATH = KEYS_PATH + '/id_rsa'  # ro file
-
+SSH_PRIVATE_KEY_PATH_REL = '/id_rsa'  # ro file
 
 IMAGE_OWNER = pwd.getpwnam('qemu').pw_uid
 IMAGE_GROUP = grp.getgrnam('qemu').gr_gid
 
-# it will be an option, default to 1
-# valid from 0 .. F
-# build-slice
-# NOTE: maybe it can work up to 254 (FE) now
-BUILD_SLICE = 0x1
 
-# Do not let the virtbs machine on the same L2,
-# with the same mac range without nat ;-)
+# WARN: muxes are different now
+@functools.lru_cache()
+def get_path(thing=''):
+    paths = CONFIG.get('paths', {})
+    root_path = paths.get('virtbs_root', '/srv/virtbs')
+    if not thing:
+        return root_path
+    return os.path.join(root_path, thing)
 
-# reserving 2^24 mac address
-# 2 hexdigit, net offset
-# 2 hexdig for slice_num +1
-# 2 hexdif for 00 reserved, 01 router, others machine offsets
-# and floating ips , FF reserved (brodcast)
-MAC_PREFIX = '52:54:00'
-
-# TODO: reserve /24 for other nets
-# 00: mynet
-# xx: other net (so we can have 255 net per slice)
-
-# ip range / 16 , first 16 bit, 2^16 address
-# last 16 bit is the same as wilt mac
-IPV4_PREFIX = '172.16'
-
-# This is just managemnt ip range,
-# we are not allocating for the others
-
-# TODO: allow to have more host per slice, on the
-# cose of lest slices . ~ 0xF slice 0XFFF host
-# maybe ot was the old plan I just forgotten ;-)
-
-NETMASK = '255.255.255.0'
 
 # We had to limit the max number of machines in order
 # fit into the port range
-# assume max 16 slince with eaxh max 255 host
-BMC_PORT_BASE = 8192
-
-
+# assume max 16 slince with each max 255 host
 def bmc_port(bslice, offset):
-    return BMC_PORT_BASE + bslice * 256 + offset
-
-
-def generate_iso_disk(image_file):
-    return """<disk type='file' device='cdrom'>
-      <driver name='qemu' type='raw'/>
-      <source file='{image_file}' cache='unsafe'/>
-      <target dev='hda' bus='ide'/>
-      <readonly/>
-    </disk>""".format(image_file=image_file)
-
-
-# is the dev name respected today at least for pci rel addr ?
-def generate_qcow2_disk(image_file, dev='vda'):
-    return """<disk type='file' device='disk'>
-      <driver name='qemu' cache='unsafe' type='qcow2'/>
-      <source file='{image_file}'/>
-      <target dev='{dev}' bus='virtio'/>
-    </disk>""".format(image_file=image_file, dev=dev)
-
-
-# expected to be defined and have bridge with the same name
-def generate_net_dev(mac, brname='bs0mynet'):
-    return """<interface type='bridge'>
-      <source bridge='{brname}'/>
-      <model type='virtio'/>
-      <mac address='{mac}'/>
-      </interface>""".format(mac=mac, brname=brname)
-
-
-def generate_dev_console(vm_uuid):
-    return """<console type='file'>
-      <source path='{path}/{vm_uuid}-console.log'/>
-      <target type='serial' port='0'/>
-    </console>""".format(vm_uuid=vm_uuid, path=LOG_PATH)
-
-
-# TODO extra_devs arg net/disk/console array (ordered)
-# TODO vnc has password arg
-def generate_libvirt_dom_xml(vm_uuid, name, memory, vcpu, dev_txts):
-    # No good reasion for using a real xml library for creating this part
-    # at least for now
-    # vm_uuid an uuid string
-    # Memory integer KiB
-    # vcpu integer number of vcpus
-    # nets_xml_txt part for nets
-    # disk_xml_part part for root, data, config drive
-    dev_str = '\n'.join(dev_txts)
-    return """<domain type='kvm'>
-  <name>{name}</name>
-  <memory unit='MiB'>{memory}</memory>
-  <vcpu placement='static'>{vcpu}</vcpu>
-  <sysinfo type='smbios'>
-    <system>
-      <entry name='product'>VirtBS Compute</entry>
-      <entry name='uuid'>{vm_uuid}</entry>
-    </system>
-  </sysinfo>
-  <os>
-    <type arch='x86_64'>hvm</type>
-    <boot dev='hd'/>
-    <smbios mode='sysinfo'/>
-  </os>
-  <features>
-    <acpi/>
-    <apic/>
-  </features>
-  <cpu mode='host-passthrough'>
-    <model fallback='allow'/>
-  </cpu>
-  <clock offset='utc'>
-    <timer name='pit' tickpolicy='delay'/>
-    <timer name='rtc' tickpolicy='catchup'/>
-    <timer name='hpet' present='no'/>
-  </clock>
-  <devices>
-    {dev_str}
-    <rng model='virtio'>
-      <backend model='random'>/dev/urandom</backend>
-    </rng>
-    <controller type='usb' index='0'>
-      <alias name='usb'/>
-    </controller>
-    <controller type='pci' index='0' model='pci-root'>
-      <alias name='pci.0'/>
-    </controller>
-    <input type='tablet' bus='usb'>
-      <alias name='input0'/>
-      <address type='usb' bus='0' port='1'/>
-    </input>
-    <input type='mouse' bus='ps2'>
-      <alias name='input1'/>
-    </input>
-    <input type='keyboard' bus='ps2'>
-      <alias name='input2'/>
-    </input>
-    <graphics type='vnc' port='-1' autoport='yes'
-              listen='0.0.0.0' keymap='en-us'/>
-    <video>
-      <model type='cirrus' vram='16384' heads='1' primary='yes'/>
-      <alias name='video0'/>
-    </video>
-  </devices>
-</domain>
-""".format(vm_uuid=vm_uuid, memory=memory, vcpu=vcpu,
-           dev_str=dev_str, name=name)
-# TODO consolelog dir..
-
-# TODO loop + allocator, updater ..
-# in the example ip mac last 3 byte matches, it can be kept
+    base = int(CONFIG.get('address_pool', {}).get('bmc_port_base', 8192))
+    return base + bslice * 256 + offset
 
 
 def qcow2_to_raw(src, dst):
@@ -238,22 +90,10 @@ def get_virtual_size(img):
     return i['virtual-size']
 
 
-RE_HUMAN_SIZE = re.compile('(\d+)(.*)')
-UNITS = {'k': 1024, 'm': 2**20, 'g': 2**30, 't': 2**40, 'p': 2**50, 'e': 2**60}
-
-
-def human_byte_to_int(human_str):
-    s = human_str.strip()
-    m = RE_HUMAN_SIZE.search(s)
-    si = int(m.group(1))
-    u = m.group(2).strip()[0].lower()
-    return si * UNITS[u]
-
-
 def create_backed_qcow2(src, dst, size='10G', bfmt='raw'):
     # the args are not shell escaped
     if size:
-        s = human_byte_to_int(size)
+        s = util.human_byte_to_int(size)
         image_size = get_virtual_size(src)
         if image_size > s:
             size = image_size
@@ -275,144 +115,36 @@ def create_empty_disk(dst, size, fmt='qcow2'):
     else:
         localsh.run("qemu-img create -f {fmt} '{dst}' '{size}'".format(
             fmt=fmt, dst=dst, size=size))
-        # to py ?
     os.chown(dst, IMAGE_OWNER, IMAGE_GROUP)
-
-
-# TODO: respect NETMASK
-# offset 0 reserved
-# offset 1 router ip
-# max offset is reserved for  brodacast
-def get_mac_for(build_slice, net_id, offset):
-    return '{MAC_PREFIX}:{bslice:02x}:{net_id:02x}:{offset:02x}'.format(
-        MAC_PREFIX=MAC_PREFIX,
-        bslice=build_slice, net_id=net_id, offset=offset)
-
-
-def get_ipv4_for(build_slice, net_id, offset):
-    # net_id unused
-    return '{IPV4_PREFIX}.{bslice}.{offset}'.format(
-        IPV4_PREFIX=IPV4_PREFIX,
-        bslice=build_slice, net_id=net_id, offset=offset)
-
-
-# normally it is just for the machines to cumminicate with themself
-# set to mtu to something high, and do not tell to the machines ;-)
-def create_blank_net(conn, build_slice, net_id, name):
-    mac = get_mac_for(build_slice, net_id, 1)
-    net_name = 'bs{build_slice}{name}'.format(build_slice=build_slice,
-                                              name=name)
-    network = """<network>
-    <name>{net_name}</name>
-    <mtu size='9050'/>
-    <bridge name='{net_name}' stp='off'/>
-    <mac address='{mac}'/>
-    </network>""".format(net_name=net_name,
-                         mac=mac)
-#  TODO: optinal transient   conn.networkCreateXML(network)
-    net = conn.networkDefineXML(network)
-    net.setAutostart(True)
-    net.create()
-
-
-def create_my_net(conn, build_slice, hosts):
-    # TODO This net must support one vlan with mtu 9000
-    net_name = 'bs{build_slice}mynet'.format(build_slice=build_slice)
-    reser = []
-    for data in hosts:
-        offset = data['offset']
-        if data.get('blank', False):  # blank machines, not managed by our dhcp
-            continue
-        mac = get_mac_for(build_slice, 0, offset)
-        ip = get_ipv4_for(build_slice, 0, offset)
-
-        name = data.get('hostname', None)
-        if not name:
-            group = data.get('hostgroup', 'host')
-            name = '{}-{:02x}'.format(group, offset)
-
-        reser.append(("<host mac='{mac}' "
-                      "name='{name}' "
-                      "ip='{ip}'/>'").format(ip=ip, name=name, mac=mac))
-
-    reservation = '\n'.join(reser)
-    mac = get_mac_for(build_slice, 0, 1)
-    ip = get_ipv4_for(build_slice, 0, 1)
-    network = """<network>
-    <name>{net_name}</name>
-    <forward mode='nat'/>
-    <bridge name='{net_name}'/>
-    <mac address='{mac}'/>
-    <ip address='{ip}' netmask='{mask}'>
-    <dhcp>
-        {reservation}
-    </dhcp>
-    </ip>
-    </network>""".format(net_name=net_name,
-                         reservation=reservation, ip=ip,
-                         mac=mac, mask=NETMASK)
-
-    conn.networkCreateXML(network)
-
-
-def virt_domain_name(build_slice, hostname):
-    return 'bs{build_slice:x}-{name}'.format(
-        build_slice=build_slice, name=hostname)
 
 
 # TODO: clean on exception
 # TODO: add support for direct kernel/initrd inject boot
 # TODO: add image creation step for fetching kernels
 #       and initrd
-def bootvm(conn, base_image, hostname, build_slice, offset,
-           memory=8192,
-           vcpu=4,
-           disk_size='20G',
-           extra_disks=(),
-           extra_net_mac_brs=(), **irrelevant):
+def bootvm(conn, node):
     # base_image sparse raw
     # assume uuids not collideing! ;-)
     # TODO: assume clock and rnd gen does not works ;-)
     # extra disks are not formated!
-    vm_uuid = str(uuid.uuid4())
+    keys_path = get_path("keys")
+    for disk in node['disks']:
+        if 'image_slot' in disk and disk['image_slot']:
+            create_backed_qcow2(
+                base_image(disk['image_slot'],
+                           disk.get('image_tag', 'default')),
+                disk['path'],  disk['size'])
+        else:
+            create_empty_disk(disk['path'], disk['size'])
 
-    net_name = get_br_name(build_slice, 'mynet')
-    virt_dom_name = virt_domain_name(build_slice, hostname)
-    # TODO: do it before
-    cfgfile.ensure_path_exists(LIVE_ROOT_PATH, owner=IMAGE_OWNER,
-                               group=IMAGE_GROUP, mode=0o755)
-    root_image = os.path.join(LIVE_ROOT_PATH, vm_uuid + '-vda')
-    mac = get_mac_for(build_slice, 0x0, offset)
-    nets_xml_txt = generate_net_dev(mac, net_name)
-    if base_image:
-        create_backed_qcow2(base_image, root_image, disk_size)
-    else:
-        create_empty_disk(root_image, disk_size)
-    disk_xml_txt = generate_qcow2_disk(root_image)
-
-    console_xml_txt = generate_dev_console(vm_uuid)
-    devs = [nets_xml_txt, disk_xml_txt, console_xml_txt]
-    if base_image:  # blank images does not gets config drive as well
-        ssh_keys = open(SSH_PUBLIC_KEY_LIST_PATH, 'r').readlines()
+    if 'config_drive' in node:
+        kpp = keys_path + SSH_PUBLIC_KEY_LIST_PATH_REL
+        ssh_keys = open(kpp, 'r').readlines()
         ssh_keys = [line.strip() for line in ssh_keys
                     if not line.startswith('#')]
-        iso = create_cloud_config_image(ssh_keys, vm_uuid, hostname)
-        devs.append(generate_iso_disk(iso))
-    offset = 1
-    for size in extra_disks:
-        dev = 'vd' + chr(ord('a') + offset)
-        disk_path = os.path.join(LIVE_ROOT_PATH, '-'.join((vm_uuid, dev)))
-        create_empty_disk(disk_path, size)
-        devs.append(generate_qcow2_disk(disk_path, dev=dev))
-        offset += 1
-    # add slice prefix ??
-    for e_mac, e_br_name in extra_net_mac_brs:
-        devs.append(generate_net_dev(e_mac, e_br_name))
+        create_cloud_config_image(node, ssh_keys)
 
-    domain_xml = generate_libvirt_dom_xml(vm_uuid,
-                                          virt_dom_name,
-                                          memory,
-                                          vcpu, devs, )
+    domain_xml = xmlvirt.generate_libvirt_dom_xml(node)
     dom = conn.defineXML(domain_xml)
     if dom is None:
         raise RuntimeError('Failed to define a domain from an XML definition')
@@ -435,15 +167,18 @@ def files_to_iso(filemap, config_image):
 
 # dhcp 'request host-name' instead of meta-data ?
 # the phone home feautere looks interesting
-def create_cloud_config_image(ssh_keys, vm_uuid, hostname):
+def create_cloud_config_image(node, ssh_keys):
+    vm_uuid = node['vm_uuid']
+    hostname = node['hostname']
+    cd_path = get_path("cd")
     ci = '#cloud-config\n' + json.dumps({
          'users': [{'name': 'stack',
                     'ssh-authorized-keys': ssh_keys,
                     'sudo': 'ALL=(ALL) NOPASSWD:ALL',
                     'lock-passwd': True}]})
-    cif = os.path.join(CONFIG_DRIVE_PATH, 'user-data-' + vm_uuid)
-    mif = os.path.join(CONFIG_DRIVE_PATH, 'meta-data-' + vm_uuid)
-    target = os.path.join(CONFIG_DRIVE_PATH, vm_uuid + '.iso')
+    cif = os.path.join(cd_path, 'user-data-' + vm_uuid)
+    mif = os.path.join(cd_path, 'meta-data-' + vm_uuid)
+    target = os.path.join(cd_path, vm_uuid + '.iso')
     mi = ("instance-id: {vm_uuid}\nhostname: {hostname}\n"
           "local-hostname: {hostname}\n").format(hostname=hostname,
                                                  vm_uuid=vm_uuid)
@@ -471,54 +206,50 @@ def bmc_creds(build_slice, offset):
             "pm_port": str(bmc_port(build_slice, offset))}
 
 
-def fork_no_wait(*args, **kwargs):
+def fork_no_wait(node):
     pid = os.fork()
     if not (pid):
         conn = get_libvirt_conn()
-        bootvm(conn, *args, **kwargs)
-        domain_name = virt_domain_name(kwargs['build_slice'],
-                                       kwargs['hostname'])
+        bootvm(conn, node)
         if VIRTBMC_ENABLED:
             vbmc_manager = vbmc.VirtualBMCManager()
             vbmc_manager.add(username='admin',
                              password='password',
-                             port=bmc_port(kwargs['build_slice'], kwargs['offset']),
+                             port=node['bmc_port'],
                              address='::',
-                             domain_name=domain_name,
+                             domain_name=node['virt_domain_name'],
                              libvirt_uri='qemu:///system',
                              libvirt_sasl_username=None,
                              libvirt_sasl_password=None)
-            vbmc_manager.start(domain_name)
+            vbmc_manager.start(node['virt_domain_name'])
         exit(0)
     return pid
 
 
 # ~ 0.3 sec in waiting for libvirt
 # fork helps, unless we wait for machined?
-def boot_vms(machines, build_slice):
+def boot_vms(nodes):
     boots = {}
-    for machine in machines:
-        # mechine migh have more arge, like ip address in the future
-        # which might not need to passed here
-        pid = fork_no_wait(build_slice=build_slice, **machine)
-        boots[pid] = machine
+    for node in nodes:
+        # mechine migh have more args, like ip address in the future
+        # which might not be need to be passed here
+
+        # ensure image , allowing some parallel build/boot, but
+        # the first node which requres the same image will do the build and
+        # wait for the earlier node
+        for disk in node['disks']:
+            if 'image_slot' in disk and disk['image_slot']:
+                base_image(disk['image_slot'], disk.get('image_tag', 'default'))
+
+        pid = fork_no_wait(node)
+        boots[pid] = node
     for p in boots.keys():
         (pid, status) = os.waitpid(p, 0)
         if status:  # not just the 8 bit exit code!
             print("Failed to boot pid: {pid}, status:"
                   " {status}, params: {params}".format(pid=pid, status=status,
-                                                       params=machine),
+                                                       params=node),
                   file=sys.stderr)
-
-
-# class or not to class this is the question ;-) ,not
-# looks like it will be enough complex to switch to classes ,and to some `real`
-# db  (leveldb ?)
-def get_image_data_dir(libname):
-    lib_dir = os.path.join(FLOATING_IMAGES, libname)
-    cfgfile.ensure_path_exists(lib_dir, owner=IMAGE_OWNER,
-                               group=IMAGE_GROUP, mode=0o755)
-    return lib_dir
 
 
 def _file_sha256_sum(for_sum):
@@ -532,11 +263,8 @@ def _file_sha256_sum(for_sum):
 # not parallel safe!
 def image_download(name, data, key=None, renew=False):
     build_id = str(uuid.uuid4())
-    if not key and 'version_key' in data:
-        key = data['version_key']
     img_dir = get_image_data_dir(name)
-    default_path = os.path.join(img_dir, 'default' if not key
-                                else 'default-' + key)
+    default_path = os.path.join(img_dir, 'default')
 
     if not renew:
         try:
@@ -549,7 +277,8 @@ def image_download(name, data, key=None, renew=False):
     D = data.copy()
     D['key'] = key
     url = data['url_pattern'].format(**D)
-    download_path = os.path.join(FETCH_PATH, os.path.basename(url))
+    fetch_path = get_path("downloads")
+    download_path = os.path.join(fetch_path, os.path.basename(url))
     # WARNING: assumes unique names
     verified = False
     if os.path.exists(download_path) and 'sha256' in data:
@@ -584,11 +313,11 @@ def image_download(name, data, key=None, renew=False):
             # assume tar autodectes the compression
             # no way specifiy the decompressed file final name !
             # not tested code path
-            localsh.run(("cd '{FETCH_PATH}'; tar -xf "
+            localsh.run(("cd '{fetch_path}'; tar -xf "
                          "'{download_path}' '{in_file}'; "
                          "cp --sparse=always '{in_file}' '{work_file}' "
                          "; rm '{in_file}'").format(
-                        FETCH_PATH=FETCH_PATH, download_path=download_path,
+                        fetch_path=fetch_path, download_path=download_path,
                         in_file=in_file))
     else:
         localsh.run(("cp --sparse=always "
@@ -601,7 +330,7 @@ def image_download(name, data, key=None, renew=False):
 
 
 # TODO: replace arg str to array , use proper escape
-def virt_costumize_script(image, script_file, args_str, log_file=None):
+def virt_costumize_script(image, script_file, args_str='', log_file=None):
     # NOTE: cannot specify a constant destination file :(
     # --copy-in {script_file}:/root/custumie.sh did not worked
     # LIBGUESTFS_BACKEND=direct , file permissionsss
@@ -638,17 +367,24 @@ def __filter_to_json(d):
     return di
 
 
-def image_virt_customize(name, data, key=None, renew=False):
+def get_image_data_dir(name):
+    lib_dir = os.path.join(get_path("library"), name)
+    cfgfile.ensure_path_exists(lib_dir, owner=IMAGE_OWNER,
+                               group=IMAGE_GROUP, mode=0o755)
+    return lib_dir
+
+
+def image_virt_customize(name, data, image_tag=None, renew=False):
     # TODO: we do not really want to have _base_image
     # to convert to raw and move it to the _base and mage the gc more complex
     location = base_image(data['base_slot'],
-                          data.get('base_version_key', None))
+                          data.get('image_tag', 'defualt'))
     # TODO: same name uniquie magic
     # TODO: build lock
     # TODO: parallel safe build
     img_dir = get_image_data_dir(name)
-    default_path = os.path.join(img_dir, 'default' if not key
-                                         else 'default-' + key)
+    default_path = os.path.join(img_dir, 'default' if not image_tag
+                                         else image_tag)
     if not renew:
         try:
             path = os.readlink(default_path)
@@ -673,11 +409,9 @@ def image_virt_customize(name, data, key=None, renew=False):
     assert script  # TODO: raise a joke
     script_file = os.path.join(img_dir, build_id + '-build.sh')
     cfgfile.content_file(script_file, script)
-    args = ""
-    if key:
-        args = '--key ' + key
     print('Customizing image for {} at {}'.format(name, build_image))
-    virt_costumize_script(build_image, script_file, args, build_log)
+    args_str = data.get('script_arguments', '')
+    virt_costumize_script(build_image, script_file, args_str, build_log)
 
     di = __filter_to_json(data)
     cfgfile.content_file(build_image + '-data.json', json.dumps(di))
@@ -691,17 +425,16 @@ def image_virt_customize(name, data, key=None, renew=False):
 image_flow_table = {}
 
 
-# default_alg: instead of version_key execute the named function
-def base_image(image_type, version_key=None):
+def base_image(image_type, image_tag='default'):
     # reqursively does the build steps to reach a valid image
     (fmt, image) = image_flow_table[image_type]['driver'](
         image_type,
-        image_flow_table[image_type],
-        version_key)
+        image_flow_table[image_type], image_tag)
     if fmt == 'qcow2':
         # WARNING: assumes globaly uniquie name
         base_file = os.path.basename(image)
-        base_path = os.path.join(BASE_IMG_PATH, base_file)
+        bpath = get_path("_base")
+        base_path = os.path.join(bpath, base_file)
         if not os.path.isfile(base_path):
             qcow2_to_raw(image, base_path)
         return base_path
@@ -715,11 +448,13 @@ def wipe_domain_by_uuid(UUID):
     desc = dom.XMLDesc()
     root = ET.fromstring(desc)
     to_del = []
+    live_path = get_path('live')
+    cd_path = get_path('cd')
     for disk in root.find('devices').findall('disk'):
         filepath = disk.find('source').get('file')
-        if filepath.startswith(LIVE_ROOT_PATH):
+        if filepath.startswith(live_path):
             to_del.append(filepath)
-        elif filepath.startswith(CONFIG_DRIVE_PATH):
+        elif filepath.startswith(cd_path):
             to_del.append(filepath)
         else:
             print("Unexpected disk location, skipping {}".format(filepath))
@@ -736,7 +471,7 @@ def wipe_domain_by_uuid(UUID):
     for f in to_del:
         try:
             os.unlink(f)
-        except:
+        except Exception:
             print("Unable to delete: '{f}'".format(f=f))
 
 
@@ -753,7 +488,8 @@ def wipe_slice(build_slice):
         name = dom.name()
         UUID = dom.UUIDString()  # the not string version is also str
         if name.startswith(ss):
-            # TODO: Make it parallel, make sure it does not stalls at hign vm count
+            # TODO: Make it parallel,
+            #  make sure it does not stalls at hign vm count
             wipe_domain_by_uuid(UUID)
 
     conn = get_libvirt_conn()
@@ -767,7 +503,8 @@ def wipe_slice(build_slice):
     # TODO: fork the vbmc handling
     if VIRTBMC_ENABLED:
         vbmc_manager = vbmc.VirtualBMCManager()
-        doms = vbmc_manager.list()  # maybe just listing the .vbmc dir would be enough
+        # maybe just listing the .vbmc dir would be enough
+        doms = vbmc_manager.list()
         if doms and isinstance(doms[0], int):
             doms = doms[1]  # lib difference hack
         for d in doms:
@@ -782,15 +519,15 @@ def get_br_name(build_slice, net_name):
 
 
 # by default without proxy command
-def generate_ansible_inventory(machines, common_opts, target_file):
+def generate_ansible_inventory(nodes, common_opts, target_file):
     stream = open(target_file, 'w')
     group_members = defaultdict(list)
     stream.write('localhost ansible_connection=local\n')
     group_members['local'].append('localhost')
-    for m in machines:
-        if not m['blank']:
-            assert m['inventory_group'] not in {'local', 'virtbs'}
-            group_members[m['inventory_group']].append(
+    for m in nodes:
+        if not m.get('blank', False):
+            assert m['hostgroup'] not in {'local', 'virtbs'}
+            group_members[m['hostgroup']].append(
                 m['hostname'])
             group_members['virtbs'].append(m['hostname'])
             stream.write(m['hostname'])
@@ -815,22 +552,17 @@ def generate_ansible_inventory(machines, common_opts, target_file):
 # temporary way for testing speedling
 def generate_ansible_inventory_speedling(machines, build_slice,
                                          common_opts, target_file):
-    #    print(machines)
     stream = open(target_file, 'w')
     group_members = defaultdict(list)
     stream.write('localhost ansible_connection=local\n')
     group_members['local'].append('localhost')
     for m in machines:
         mac = get_mac_for(build_slice, 0x0, m['offset'])
-        # net_name = get_br_name(build_slice, 'mynet')
-        networks = {'access': {'if_lookup': {'mac': mac}, 'addresses': [m['access_ip']]}}
-        if m['extra_net_mac_brs']:
-            (emac, ebr) = m['extra_net_mac_brs'][0]
-            addr = get_ipv4_for(build_slice, 1, m['offset'])  # 1 is incorrect, registry must be more visible
-            networks['extra'] = {'if_lookup': {'mac': emac}, 'addresses': [addr]}
-        if not m['blank']:
-            assert m['inventory_group'] not in {'local', 'virtbs'}
-            group_members[m['inventory_group']].append(
+        networks = {'access': {'if_lookup': {'mac': mac},
+                               'addresses': [m['access_ip']]}}
+        if not m.get('blank'):
+            assert m['hostgroup'] not in {'local', 'virtbs'}
+            group_members[m['hostgroup']].append(
                 m['hostname'])
             group_members['virtbs'].append(m['hostname'])
             stream.write(m['hostname'])
@@ -860,6 +592,228 @@ def generate_ansible_inventory_speedling(machines, build_slice,
     stream.close()
 
 
+NAME_TO_ID = {}
+SERVED_NETS = set()
+
+
+def assigne_net_names_to_id():
+    counter = 0
+    nf = CONFIG.get('network_flags', {})
+    for _, params in machine_types.items():
+        if 'nets' in params:
+            for net in params['nets']:
+                if net not in NAME_TO_ID:
+                    NAME_TO_ID[net] = counter
+                    counter += 1
+
+                if net in nf and nf[net].get('address_serving', False):
+                    SERVED_NETS.add(net)
+
+
+# nets not in this dict are not requisted
+# nets with [] requested, but do not have any reservation
+NAME_TO_RESERVATION = {}
+
+
+def populate_reservations():
+    nf = CONFIG.get('network_flags', {})
+    for node in NODES:
+        if node.get('blank', False):
+            continue
+        if 'hostname' not in node:
+            continue
+        hostname = node['hostname']
+        ifs = node.get('interfaces', [])
+        for iface in ifs:
+            net = iface.get('network', None)
+            if not net:
+                continue
+            rese = NAME_TO_RESERVATION.setdefault(net, {4: [], 6: []})
+            if net not in SERVED_NETS:
+                continue
+            if net in nf:
+                ip_version = nf[net].get('ip_version', 4)
+            else:
+                ip_version = 4
+            rese[ip_version].append({'mac': iface['mac'],
+                                     'ip': iface['access_ip'], 'name': hostname})
+
+
+def create_networks(conn, build_slice):
+    nf = CONFIG.get('network_flags', {})
+    for net, rese in NAME_TO_RESERVATION.items():
+        net_name = 'bs' + str(build_slice) + net
+
+        net_id = NAME_TO_ID[net]
+        base = {'name': net_name,
+                'mac': get_mac_for(build_slice, net_id, 1),
+                'ipv4_address': get_addr_for(build_slice, net_id, 1, ipv=4),
+                'ipv6_address': get_addr_for(build_slice, net_id, 1, ipv=6),
+                'ipv4_mask': '255.255.255.0',  # TODO: calculate
+                'ipv6_prefix': 64,
+                'internet_access': (nf.get(net, {}).
+                                    get('internet_access', False)),
+                'reservations': rese}
+        net_xml = xmlvirt.netxml_from(base)
+        print('Creating network: ' + net_name)
+        net = conn.networkDefineXML(net_xml)
+        net.setAutostart(True)
+        net.create()
+
+
+# offset 0 reserved
+# offset 1 router ip
+# max offset is reserved for  brodacast
+
+MAC_START = None
+MAC_SLICE_MUL = None
+MAC_SUBNET_MUL = None
+
+IPV4_START = None
+IPV4_SLICE_MUL = None
+IPV4_SUBNET_MUL = None
+IPV4_NETMASK = None
+
+IPV6_SLICE_MUL = None
+IPV6_SUBNET_MUL = None
+IPV6_PREFIX = None
+
+
+def process_address_pool():
+    global MAC_START, MAC_SLICE_MUL, MAC_SUBNET_MUL
+    global IPV4_START, IPV4_SLICE_MUL, IPV4_NETMASK, IPV4_SUBNET_MUL
+    global IPV6_START, IPV6_SLICE_MUL, IPV6_SUBNET_MUL, IPV6_PREFIX
+
+    addrs = CONFIG.get('address_pool', {})
+    mac_start = addrs.get('mac_start', '52:54:00:00:00')
+    MAC_START = int(mac_start.replace(':', ''), 16)
+    # endian ?
+    ipv4_start = addrs.get('ipv4_start', '172.16.0.0')
+    IPV4_START = ipaddress.IPv4Address(ipv4_start)
+
+    ipv6_start = addrs.get('ipv6_start', 'fd00:aaaa::0')
+    IPV6_START = ipaddress.IPv6Address(ipv6_start)
+
+    ipv4_slice_prefix = int(addrs.get('ipv4_slice_prefix', 20))
+    ipv4_prefix = int(addrs.get('ipv4_subnet_prefix', 24))
+    IPV4_SLICE_MUL = 2**(32 - ipv4_slice_prefix)
+    IPV4_SUBNET_MUL = 2**(32 - ipv4_prefix)
+    IPV4_NETMASK = str(ipaddress.IPv4Network('0.0.0.0/' + str(ipv4_prefix))
+                       .netmask)
+
+    MAC_SUBNET_MUL = IPV4_SUBNET_MUL
+    mac_slice_extra_power = int(addrs.get('mac_slice_extra_power', 8))
+    MAC_SLICE_MUL = 2**(32 - ipv4_slice_prefix + mac_slice_extra_power)
+
+    ipv6_subnet_balance = int(addrs.get('ipv6_subnet_balance', 0))
+    IPV6_PREFIX = 64 + ipv6_subnet_balance
+
+    IPV6_SLICE_MUL = 2**(128 - IPV6_PREFIX - (32 - ipv4_slice_prefix))
+    IPV6_SUBNET_MUL = 2**(128 - IPV6_PREFIX)
+
+    IPV6_PREFIX = 64 + ipv6_subnet_balance
+
+
+def get_mac_for(build_slice, net_id, offset, delim=':'):
+    mac_int = (MAC_START + build_slice*MAC_SLICE_MUL +
+               MAC_SUBNET_MUL * net_id + offset)
+    # struct ?
+    mac_hex = "{:012x}".format(mac_int)
+    mac_str = delim.join(mac_hex[i:i+2] for i in range(0, len(mac_hex), 2))
+    return mac_str
+
+
+def get_addr_for(build_slice, net_id, offset, ipv=4):
+    # net_id unused
+    if int(ipv) == 4:
+        rel = build_slice*IPV4_SLICE_MUL + IPV4_SUBNET_MUL * net_id + offset
+        return str(IPV4_START + rel)
+    if int(ipv) == 6:
+        rel = build_slice*IPV6_SLICE_MUL + IPV6_SUBNET_MUL * net_id + offset
+        return str(IPV6_START + rel)
+    raise NotImplementedError("Not implemented ip version " + ipv)
+
+
+def virt_domain_name(build_slice, hostname):
+    return 'bs{build_slice:x}-{name}'.format(
+        build_slice=build_slice, name=hostname)
+
+
+def generate_node(build_slice, offset, machine_type_name):
+    machine_type = machine_types[machine_type_name]
+    vm_uuid = str(uuid.uuid4())
+    hostname = '{}-{:02x}'.format(machine_type_name, offset)
+    access_ip = None
+    ip_version = 4
+    if 'nets' in machine_type:
+        if machine_type['nets']:
+            net = machine_type['nets'][0]
+            ip_version = CONFIG.get('network_flags', {}).get('ip_version', 4)
+            access_ip = get_addr_for(build_slice,
+                                     NAME_TO_ID[net], offset, ipv=ip_version)
+    config_drive_path = get_path('cd')
+    console_log_path = get_path('log')
+    node = {'console_log': os.path.join(console_log_path,
+                                        vm_uuid + '-console.log'),
+            'config_drive': os.path.join(config_drive_path, vm_uuid + '.iso'),
+            'vm_uuid': vm_uuid,
+            'vcpu': machine_type.get('vcpu', 1),
+            'memory': machine_type.get('memory', 1024),
+            'bmc_port': bmc_port(build_slice, offset),
+            'hostname': hostname,
+            'virt_domain_name': virt_domain_name(build_slice, hostname),
+            'hostgroup': machine_type_name,
+            'offset': offset,
+            'build_slice': build_slice,
+            'access_ip': access_ip,
+            'access_ip_version': ip_version
+            # allways the first network is the one we want to ssh
+            }
+    node['interfaces'] = []
+    nets = machine_type.get('nets', [])
+    for net in nets:
+        ip_version = CONFIG.get('network_flags', {}).get('ip_version', 4)
+        access_ip = get_addr_for(build_slice,
+                                 NAME_TO_ID[net], offset, ipv=ip_version)
+        node['interfaces'].append({
+            'bridge': get_br_name(build_slice, net),  # del
+            'network': net,
+            'mac': get_mac_for(build_slice, NAME_TO_ID[net], offset),
+            'ip_version': ip_version,
+            'access_ip': access_ip})
+    dev = 'vda'
+    # TODO: add (back) the ability to select older version from the slot
+    disks = machine_type.get('disks', {})
+    dlist = []
+    for d, v in disks.items():
+        v['name_ref'] = d
+        dlist.append(v)
+    dlist = sorted(dlist, key=lambda x: x['name_ref'])
+    counter = ord('a')
+    node['disks'] = []
+    live_path = get_path('live')
+    for d in dlist:
+        dev = 'vd' + chr(counter)
+        counter += 1
+        node['disks'].append({'size': d.get('size', '10G'),
+                              'image_slot': d.get('image_slot', None),
+                              'path': os.path.join(
+            live_path, '-'.join((vm_uuid, dev)))})
+    return node
+
+
+NODES = []
+
+
+def generate_nodes(build_slice, request):
+    offset = 2
+    for mtype, num in request.items():
+        for _ in range(num):
+            NODES.append(generate_node(build_slice, offset, mtype))
+            offset += 1
+    return NODES
+
+
 def generate_ipmi_instack(machines, build_slice, target_file):
     instack_nodes = []
     for n in machines:
@@ -880,13 +834,14 @@ def generate_ipmi_instack(machines, build_slice, target_file):
 # ssh alias file
 def generate_ssh_config(machines, common_opts, target_file):
     stream = open(target_file, 'w')
+    priv_key = get_path('keys') + SSH_PRIVATE_KEY_PATH_REL
     for m in machines:
         stream.write(('Host {name}\n'
                       '    HostName {ip}\n'
                       '    User stack\n'
                       '    IdentityFile {id_file}\n').format(name=m['hostname'],
                                                              ip=m['access_ip'],
-                                                             id_file=SSH_PRIVATE_KEY_PATH))
+                                                             id_file=priv_key))
         for k, v in common_opts.items():
             stream.write('    %s %s\n' % (k, v))
     stream.close()
@@ -906,57 +861,18 @@ def get_host_ip():
     return host_ip
 
 
-def process_request(build_slice, machine_types, request):
-    net_offset_high = 1
-    net_reserved = {}  # {'mynet': 0}
-    offset = 2
-    unrolled = []
-    for group, num in request.items():
-        for _ in range(num):
-            machine = machine_types[group].copy()  # deep ?
-            unrolled.append(machine)
-            machine['hostgroup'] = group
-            # without bs
-            # with bigger mask we will have more digits
-            machine['hostname'] = '{}-{:02x}'.format(group, offset)
-            machine['offset'] = offset
-            machine['extra_net_mac_brs'] = []
-            for net in machine.get('extra_nets', []):
-                assert net != 'mynet'
-                if net in net_reserved:
-                    net_offset = net_reserved[net]
-                else:
-                    net_reserved[net] = net_offset = net_offset_high
-                    net_offset_high += 1
+def process_request(build_slice, request):
+    assigne_net_names_to_id()
+    generate_nodes(build_slice, request)
+    populate_reservations()
 
-                e_mac = get_mac_for(build_slice, net_offset, offset)
-                e_br = get_br_name(build_slice, net)
-                machine['extra_net_mac_brs'].append((e_mac, e_br))
-            if 'base_image' not in machine:
-                if 'image' in machine:
-                    image_type = machine['image']
-                    vk = machine.get('version_key', None)
-                    machine['base_image'] = base_image(image_type,
-                                                       version_key=vk)
-                elif not machine.get('blank', False):
-                    raise Exception('Non balnk machine without base_image or '
-                                    'image ')
-                else:
-                    machine['base_image'] = None
-            if 'blank' not in machine:
-                machine['blank'] = False
-            machine['access_ip'] = get_ipv4_for(build_slice, 0, offset)
-            if 'inventory_group' not in machine:
-                machine['inventory_group'] = machine['hostgroup']
-            offset += 1
     wipe_slice(build_slice)
     conn = get_libvirt_conn()
-    create_my_net(conn, build_slice, unrolled)
-    for name, net_id in net_reserved.items():
-        create_blank_net(conn, build_slice, net_id, name)
-    boot_vms(unrolled, build_slice)
+    create_networks(conn, build_slice)
+    boot_vms(NODES)
     # TODO persist pattern mux
-    ssh_mux_base_path = os.path.join(DATA_PATH, 'ssh_mux', str(build_slice))
+    vbs_root = get_path()
+    ssh_mux_base_path = os.path.join(vbs_root, 'ssh_mux', str(build_slice))
     cfgfile.ensure_path_exists(ssh_mux_base_path, owner=IMAGE_OWNER,
                                group=IMAGE_GROUP, mode=0o1777)
     # switch to key value to be ssh conf friendly
@@ -973,17 +889,17 @@ def process_request(build_slice, machine_types, request):
     ansible_ssh_common_args = ' '.join('-o %s=%s' % (k, v)
                                        for k, v in ssh_general_options.items())
     # TODO: create variant with proxy command
-    generate_ansible_inventory(unrolled, {
+    generate_ansible_inventory(NODES, {
         'ansible_ssh_user': 'stack',
         'ansible_ssh_common_args': ansible_ssh_common_args},
         'hosts-bs' + str(build_slice))
 
-    generate_ansible_inventory_speedling(unrolled, build_slice, {
+    generate_ansible_inventory_speedling(NODES, build_slice, {
         'ansible_ssh_user': 'stack',
         'ansible_ssh_common_args': ansible_ssh_common_args},
         'sl-hosts-bs' + str(build_slice))
 
-    generate_ssh_config(unrolled, ssh_general_options,
+    generate_ssh_config(NODES, ssh_general_options,
                         'sshconf-bs' + str(build_slice))
 
     # TODO: try to gen remote files, which respects the source's
@@ -996,19 +912,18 @@ def process_request(build_slice, machine_types, request):
                                            ' -W %h:%p {usr}@{hst}').format(
                                                hst=host_ip, usr=l_user)
     del ssh_general_options['ControlPath']  # assume the remote has a better
-    generate_ansible_inventory(unrolled, {
+    generate_ansible_inventory(NODES, {
         'ansible_ssh_user': 'stack',
         'ansible_ssh_common_args': ansible_ssh_common_args},
         'hosts-remote-bs' + str(build_slice))
 
-    generate_ssh_config(unrolled, ssh_general_options,
+    generate_ssh_config(NODES, ssh_general_options,
                         'sshconf-remote-bs' + str(build_slice))
-    generate_ipmi_instack(unrolled, build_slice,
+    generate_ipmi_instack(NODES, build_slice,
                           'instackenv-' + str(build_slice) + '.json')
     # TODO: create instack.json from the blank nodes,
 
 
-# process_request(1,  machine_types, request)
 def queury_non_root():
     non_root = os.environ.get('SUDO_USER', 'root').strip()
     if non_root and non_root != 'root':
@@ -1017,34 +932,40 @@ def queury_non_root():
         non_root = localsh.ret('logname').strip()
         if non_root and non_root != 'root':
             return non_root
-    except:
+    except Exception:
         pass
     try:
         localsh.ret("who am i | awk '{print $1}'").strip()
         if non_root and non_root != 'root':
             return non_root
-    except:
+    except Exception:
         pass
 
 
 def create_workspace():
     # consider adding other groups
-    dirs = [DATA_PATH, FETCH_PATH, FLOATING_IMAGES, BASE_IMG_PATH,
-            LIVE_ROOT_PATH, CONFIG_DRIVE_PATH, LOG_PATH, KEYS_PATH]
+    root = get_path() + os.path.sep
+    dirs = ['downloads', 'library', '_base',
+            'live', 'cd', 'log', 'keys']
     for d in dirs:
-        cfgfile.ensure_path_exists(d, owner=IMAGE_OWNER,
+        cfgfile.ensure_path_exists(root + d, owner=IMAGE_OWNER,
                                    group=IMAGE_GROUP, mode=0o755)
 
     # is priv key exists
-    if not os.path.isfile(SSH_PRIVATE_KEY_PATH):
-        localsh.run("ssh-keygen -t rsa -b 4096 -P '' -f '{path}'".format(path=SSH_PRIVATE_KEY_PATH))
-    if not os.path.isfile(SSH_PUBLIC_KEY_LIST_PATH):
-        localsh.run("ssh-keygen -y -f '{private'} > '{public}'".format(private=SSH_PRIVATE_KEY_PATH,
-                                                                       public=SSH_PUBLIC_KEY_LIST_PATH))
+    base_key_path = get_path("keys")
+    priv_key = base_key_path + SSH_PRIVATE_KEY_PATH_REL
+    pub_keys = base_key_path + SSH_PUBLIC_KEY_LIST_PATH_REL
+    if not os.path.isfile(priv_key):
+        localsh.run("ssh-keygen -t rsa -b 4096 -P '' -f '{path}'".format(
+            path=priv_key))
+    if not os.path.isfile(pub_keys):
+        localsh.run("ssh-keygen -y -f '{private'} > '{public}'".format(
+            private=priv_key,
+            public=pub_keys))
     non_root = queury_non_root()
     if non_root:
         localsh.run("chown {non_root} '{priv}'".format(non_root=non_root,
-                                                       priv=SSH_PRIVATE_KEY_PATH))
+                                                       priv=priv_key))
 
 
 # TODO: cli, some argparse thing ..
@@ -1083,18 +1004,25 @@ def gen_parser():
     # required=True not in py3.6
     sps = parser.add_subparsers(help='sub-command help', dest='command')
     sps.add_parser('wipe', help='Destroys the slice')
-    cycle_parser = sps.add_parser('cycle', help='Destroys the  slice, and creates a new one')
-    cycle_parser.add_argument('matrix', help="',' sperated list of machine matrxes from the config file")
-    cycle_parser.add_argument('topology', help=" machin_type:nr_instances, ..")
+    cycle_parser = sps.add_parser('cycle',
+                                  help='Destroys the  slice, and creates a new one')
+    cycle_parser.add_argument('matrix',
+                              help="',' sperated list of machine matrixes from the config file")
+    cycle_parser.add_argument('topology',
+                              help=" machine_type:nr_instances, ..")
     return parser
 
 
+CONFIG = {}
+
+
 def main():
+    global CONFIG
     global image_flow_table
     global machine_types
     parser = gen_parser()
     args = parser.parse_args(sys.argv[1:])
-    config = yaml.load(open(args.config))
+    config = CONFIG = yaml.load(open(args.config))
     image_flow_table = config['image_flow']
 
     for rec, val in image_flow_table.items():
@@ -1113,10 +1041,10 @@ def main():
         machine_types = config['machine_matrix'][to_mul[0]]
         for mul in to_mul[1:]:
             util.dict_merge(machine_types, config['machine_matrix'][mul])
-
-        request = OrderedDict((a, int(b)) for (a, b)
-                              in (l.split(':') for l in args.topology.split(',')))
-        process_request(build_slice,  machine_types, request)
+        request = dict((a, int(b)) for (a, b)
+                       in (l.split(':') for l in args.topology.split(',')))
+        process_address_pool()
+        process_request(build_slice, request)
     else:
         raise Exception('Valid commands are: wipe, cycle')
 

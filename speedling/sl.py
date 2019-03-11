@@ -46,7 +46,7 @@ def main(create_inventory_and_glb, use_globals,
     facility.start_pending()
     try:
         facility.task_wants(*goals)
-    except:
+    except Exception:
         LOG.info('Looks Bad: ' + ', '.join(f.__name__ for f in facility.FAILED))
         raise
     LOG.info('Seams ok..')

@@ -3,6 +3,8 @@ import subprocess
 import threading
 import time
 
+from speedling import util
+
 LOG = logging.getLogger(__name__)
 
 # TODO: nicer logging
@@ -77,7 +79,7 @@ def ret(cmd, single=False, binary=False):
         if not binary:
             LOG.info(u_stdout)
         LOG.error(u_stderr)
-        raise Exception(str((cmd, r, u_stderr)))  # TODO: new ex
+        raise util.NonZeroExitCode(str((cmd, r, u_stderr)))  # TODO: new ex
     if u_stderr:
         LOG.info(u_stderr)
     if not binary:
@@ -96,7 +98,7 @@ def run(cmd, single=False):
         LOG.info(cmd)
         LOG.info(u_stdout)
         LOG.error(u_stdout)
-        raise Exception(str((cmd, r, u_stdout, u_stderr)))  # TODO: new ex
+        raise util.NonZeroExitCode(str((cmd, r, u_stdout, u_stderr)))  # TODO: new ex
     LOG.debug(str((cmd, u_stdout, u_stderr)))
 
 
@@ -111,7 +113,7 @@ def run_stream_in(stream, cmd, single=False):
         LOG.info(cmd)
         LOG.info(u_stdout)
         LOG.error(u_stdout)
-        raise Exception(str((cmd, r, u_stdout, u_stderr)))  # TODO: new ex
+        raise util.NonZeroExitCode(str((cmd, r, u_stdout, u_stderr)))  # TODO: new ex
     LOG.debug(str((cmd, u_stdout, u_stderr)))
 
 

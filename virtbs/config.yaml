@@ -1,21 +1,37 @@
+paths:
+    virtbs_root: /srv/virtbs
+
+owner:
+    default_group: qemu
+
+
+address_pool:
+        mac_start: '52:54:00:00:00'
+        ipv4_start: '172.16.0.0'
+        # 16 slices each with 16 maximum network each with maximum ~253 machine
+        ipv4_virtbs_prefix: 16  # 255.255.0.0 (not in use)
+        ipv4_slice_prefix: 20  # 255.255.240.0
+        ipv4_subnet_prefix: 24  # 255.255.255.0
+        mac_slice_extra_power: 8  # add 4 bit extra above the nets for the mac pool, just for `ip addressles` interfaces
+        ipv6_start: 'fd00:aaaa::0'
+        ipv6_subnet_balance: 0  # each subnet is /64 by default, it can be +- shift, same number of ipv6 subnet supported as ipv4
+        bmc_port_pase: 8192
+
 image_flow:
     f29:
         driver: image_download
-        url_pattern: https://download.fedoraproject.org/pub/fedora/linux/releases/29//Cloud/x86_64/images/Fedora-Cloud-Base-29-{key}.x86_64.raw.xz
-        version_key: '1.2'
+        url_pattern: https://download.fedoraproject.org/pub/fedora/linux/releases/29//Cloud/x86_64/images/Fedora-Cloud-Base-29-1.2.x86_64.raw.xz
         sha256: 'd44dccfaa302dc25a0ca42ad442d4b1651aca486d8940238649062b72e8bf466'
         compression: xz
         fmt: raw
     ubuntu-18.10:
         driver: image_download
-        url_pattern: https://cloud-images.ubuntu.com/cosmic/{key}/cosmic-server-cloudimg-amd64.img
-        version_key: '20190301'
+        url_pattern: https://cloud-images.ubuntu.com/cosmic/20190301/cosmic-server-cloudimg-amd64.img
         sha256: '687361c7913cbf27f6245857491cbbd348bbdf3f0ca96cd84d20efd5413c7021'
         fmt: qcow2
     opensuse-15.0:
         driver: image_download
-        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-{key}.qcow2
-        version_key: '0.0.4-Buildlp150.12.124'
+        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-0.0.4-Buildlp150.12.124.qcow2
         sha256: 'dadcb47d14121b4240827ce9d92fc3d99b1142887dc37adb294493cef698973a'
         fmt: qcow2
     f29-my:
@@ -64,85 +80,178 @@ image_flow:
         script:
             file: virtbs/bscript/os-pipgit.sh
 
+network_flags:
+   mynet:
+      internet_access: True
+      address_serving: True
+      ip_version: 4
+      mtu: 1500
+
+   net_team_1:
+   net_team_2:
+      same_bridge: net_team_1
+
 machine_matrix:
     roles:
         # default gate size (but no swap)
         controller:
             memory: 8192
             vcpu: 8
-            extra_nets: ['data']
+            disable_address_serving: False
+            nets: ['mynet', 'data']
+            disks:
+               disk0:
+                  image_slot:
+                  image_tag: default
+                  size: '40G'
         # small worker
         worker:
             memory: 2048
             vcpu: 2
-            extra_nets: ['data']
+            disable_address_serving: False
+            nets: ['mynet','data']
         # cloud image as is
         plain:
             memory: 8192
             vcpu: 8
-            disk_size: '40G'
+            disable_address_serving: False
         # cloud image with basic tools
         minim:
             memory: 8192
             vcpu: 8
-            disk_size: '40G'
+            nets: [mynet]
+            disable_address_serving: False
         # image before getting source pypi packages
         osbase:
             memory: 8192
             vcpu: 8
-            disk_size: '40G'
+            nets: [mynet]
+            disable_address_serving: False
         # multi disk node for swift/ceph
         disk:
             blank: False
             memory: 4096
             vcpu: 2
-            extra_nets: ['data', 'replicate']
-            extra_disks: ['4G', '4G', '4G']
+            nets: [mynet, 'data', 'replicate']
+            disable_address_serving: False
+            disks:
+                disk1:
+                  size: '4G'
+                disk2:
+                  size: '4G'
+                disk3:
+                  size: '4G'
         # machine needs to be network booted
         pxe_compute:
             blank: True
             memory: 4096
             vcpu: 2
+            access_net: mynet
+            disable_address_serving: True
+            disks:
+               disk0:
+                  size: '40G'
         # TODO: support for node group connected net appliances
 
     fedora:
         controller:
-            image: f29-dev
+            disks:
+                disk0:
+                    image_slot: f29-dev
         worker:
-            image: f29-dev
+            disks:
+                disk0:
+                    image_slot: f29-dev
         plain:
-            image: f29
+            disks:
+                disk0:
+                    image_slot: f29
         minim:
-            image: f29-my
+            disks:
+                disk0:
+                    image_slot: f29-my
         osbase:
-            image: f29-my-pkg
+            disks:
+                disk0:
+                    image_slot: f29-my-pkg
         disk:
-            image: f29-dev
+            disks:
+                disk0:
+                    image_slot: f29-dev
 
     ubuntu:
         controller:
-            image: ubi-dev
+            disks:
+                disk0:
+                    image_slot:  ubi-dev
         worker:
-            image: ubi-dev
+            disks:
+                disk0:
+                    image_slot: ubi-dev
         plain:
-            image: ubuntu-18.10
+            disks:
+                disk0:
+                    image_slot: ubuntu-18.10
         minim:
-            image: ubi-my
+            disks:
+                disk0:
+                    image_slot: ubi-my
         osbase:
-            image: ubi-my-pkg
+            disks:
+                disk0:
+                    image_slot:  ubi-my-pkg
         disk:
-            image: ubi-dev
+            disks:
+                disk0:
+                    image_slot: ubi-dev
 
     opensuse:
         controller:
-            image: suse-dev
+            disks:
+                disk0:
+                    image_slot: suse-dev
         worker:
-            image: suse-dev
+            disks:
+                disk0:
+                    image_slot: suse-dev
         plain:
-            image: opensuse-15.0
+            disks:
+                disk0:
+                    image_slot: opensuse-15.0
         minim:
-            image: suse-my
+            disks:
+                disk0:
+                    image_slot: suse-my
         osbase:
-            image: suse-my-pkg
+            disks:
+                disk0:
+                    image_slot:  suse-my-pkg
         disk:
-            image: suse-dev
+            disks:
+                disk0:
+                    image_slot:  suse-dev
+    passed:
+        controller:
+            disks:
+                disk0:
+                    image_tag: passed
+        worker:
+            disks:
+                disk0:
+                    image_tag: passed
+        plain:
+            disks:
+                disk0:
+                    image_tag: passed
+        minim:
+            disks:
+                disk0:
+                    image_tag: passed
+        osbase:
+            disks:
+                disk0:
+                    image_tag: passed
+        disk:
+            disks:
+                disk0:
+                    image_tag: passed

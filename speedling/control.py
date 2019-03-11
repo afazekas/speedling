@@ -195,7 +195,7 @@ def sender(ssh_ctx):
         if e.errno != errno.EPIPE:
             LOG.exception('Unexpected I/O Error')
         raise e
-    except:
+    except BaseException:
         ssh_ctx['terminate'] = True
         LOG.exception('Strange exception in the ssh sender')
         raise

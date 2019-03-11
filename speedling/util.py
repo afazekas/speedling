@@ -1,5 +1,6 @@
 import collections
 import os
+import re
 import random
 import threading
 from collections import abc
@@ -14,6 +15,17 @@ try:
     from shlex import quote as cmd_quote
 except ImportError:
     from pipes import quote as cmd_quote  # noqa others can use form here
+
+RE_HUMAN_SIZE = re.compile(r'(\d+)(.*)')
+UNITS = {'k': 1024, 'm': 2**20, 'g': 2**30, 't': 2**40, 'p': 2**50, 'e': 2**60}
+
+
+def human_byte_to_int(human_str):
+    s = human_str.strip()
+    m = RE_HUMAN_SIZE.search(s)
+    si = int(m.group(1))
+    u = m.group(2).strip()[0].lower()
+    return si * UNITS[u]
 
 
 def lock_sigleton_call(the_do_do):
@@ -202,3 +214,15 @@ def get_distro():
     else:
         raise Exception('Unable to figure out the Linux distribution')
     return DISTRO
+
+
+class SpeedlingException(Exception):
+    pass
+
+
+class NonZeroExitCode(SpeedlingException):
+    pass
+
+
+class TaskAbort(SpeedlingException):
+    pass

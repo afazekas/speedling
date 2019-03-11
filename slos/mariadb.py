@@ -10,7 +10,7 @@ from speedling import localsh
 from speedling import util
 
 LOG = logging.getLogger(__name__)
-SECOND_THING = re.compile('\w+\s+(\w+)')
+SECOND_THING = re.compile(r'\w+\s+(\w+)')
 
 
 # TODO: wait for pkgs instead etc, do not forget systemdconfig
@@ -193,7 +193,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
     def do_create_clustr_user(cname):
         self = facility.get_component(cname)
         passwd = util.get_keymgr()(self.name, 'clustercheckuser')
-        pwd = passwd.replace('\\', '\\\\').replace("'", r"\'").replace('$', '\$')
+        pwd = passwd.replace('\\', '\\\\').replace("'", r"\'").replace('$', r'\$')
         sql = "GRANT PROCESS ON *.* TO 'clustercheckuser'@'localhost' IDENTIFIED BY '{pwd}'".format(pwd=pwd)
         # $ for shell, the others for mysql
         retry = 1024  # wating for mariadb become ready
@@ -202,7 +202,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
                 script = 'mysql -u root <<EOF\n{sql}\nEOF\n'.format(sql=sql)
                 localsh.run(script)
                 break
-            except:
+            except util.NonZeroExitCode:
                 if retry:
                     time.sleep(0.2)
                     retry -= 1
@@ -288,7 +288,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
         FROM INFORMATION_SCHEMA.TABLES WHERE table_schema='{schema}';""".format(
             schema=schema, user=user,
             # $ for shell, the others for mysql
-            passwd=passwd.replace('\\', '\\\\').replace("'", r"\'").replace('$', '\$')
+            passwd=passwd.replace('\\', '\\\\').replace("'", r"\'").replace('$', r'\$')
         )
         retry = 1024  # wating for mariadb become ready
         while True:
@@ -302,7 +302,7 @@ DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
                     script = 'mysql -u root <<EOF\n{sql}\nEOF\n'.format(
                         sql=sql)
                 break
-            except:
+            except util.NonZeroExitCode:
                 if retry:
                     time.sleep(0.2)
                     retry -= 1
