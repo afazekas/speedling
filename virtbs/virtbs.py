@@ -593,21 +593,17 @@ def generate_ansible_inventory_speedling(machines, build_slice,
 
 
 NAME_TO_ID = {}
-SERVED_NETS = set()
 
 
 def assigne_net_names_to_id():
-    counter = 0
-    nf = CONFIG.get('network_flags', {})
+    counter = 1
+    # 0 is reserved for specail lo usage
     for _, params in machine_types.items():
         if 'nets' in params:
             for net in params['nets']:
                 if net not in NAME_TO_ID:
                     NAME_TO_ID[net] = counter
                     counter += 1
-
-                if net in nf and nf[net].get('address_serving', False):
-                    SERVED_NETS.add(net)
 
 
 # nets not in this dict are not requisted
@@ -617,6 +613,8 @@ NAME_TO_RESERVATION = {}
 
 def populate_reservations():
     nf = CONFIG.get('network_flags', {})
+    ap = CONFIG.get('address_pool', {})
+    default_4 = ap.get('ipv4_address_serving_default_enabled', False)
     for node in NODES:
         if node.get('blank', False):
             continue
@@ -626,33 +624,39 @@ def populate_reservations():
         ifs = node.get('interfaces', [])
         for iface in ifs:
             net = iface.get('network', None)
-            if not net:
-                continue
             rese = NAME_TO_RESERVATION.setdefault(net, {4: [], 6: []})
-            if net not in SERVED_NETS:
-                continue
             if net in nf:
-                ip_version = nf[net].get('ip_version', 4)
+                if not nf[net].get('address_serving_4', default_4):
+                    continue
             else:
-                ip_version = 4
-            rese[ip_version].append({'mac': iface['mac'],
-                                     'ip': iface['access_ip'], 'name': hostname})
+                continue
+            rese[4].append({'mac': iface['mac'],
+                            'ip': iface['ipv4_addr'], 'name': hostname})
 
 
 def create_networks(conn, build_slice):
     nf = CONFIG.get('network_flags', {})
+    ap = CONFIG.get('address_pool', {})
+    defualt_atype = ap.get('prefered_address', 'ipv6stateless')
+    default_stateless = ap.get('ipv6_stateless_default_enabled', False)
+    if defualt_atype == 'ipv4':
+        defualt_atype = 'ipv6stateless'
     for net, rese in NAME_TO_RESERVATION.items():
         net_name = 'bs' + str(build_slice) + net
+        net_opts = nf.get(net, {})
 
         net_id = NAME_TO_ID[net]
+        address_serving_6 = net_opts.get('address_serving_6', default_stateless)
+        atype = net_opts.get('prefered_address', 'ipv6stateless')
+        if atype == 'ipv4':
+            atype = 'ipv6stateless'
         base = {'name': net_name,
                 'mac': get_mac_for(build_slice, net_id, 1),
-                'ipv4_address': get_addr_for(build_slice, net_id, 1, ipv=4),
-                'ipv6_address': get_addr_for(build_slice, net_id, 1, ipv=6),
+                'ipv4_address': get_addr_for(build_slice, net_id, 1, atype='ipv4'),
+                'ipv6_address': get_addr_for(build_slice, net_id, 1, atype=atype),
                 'ipv4_mask': '255.255.255.0',  # TODO: calculate
-                'ipv6_prefix': 64,
-                'internet_access': (nf.get(net, {}).
-                                    get('internet_access', False)),
+                'internet_access': net_opts.get('internet_access', False),
+                'address_serving_6': address_serving_6,
                 'reservations': rese}
         net_xml = xmlvirt.netxml_from(base)
         print('Creating network: ' + net_name)
@@ -676,13 +680,16 @@ IPV4_NETMASK = None
 
 IPV6_SLICE_MUL = None
 IPV6_SUBNET_MUL = None
-IPV6_PREFIX = None
+IPV6_PREFIX = 64
+
+IPV6_LINK_LOCAL_START = ipaddress.IPv6Address('fe80::0')
 
 
 def process_address_pool():
     global MAC_START, MAC_SLICE_MUL, MAC_SUBNET_MUL
     global IPV4_START, IPV4_SLICE_MUL, IPV4_NETMASK, IPV4_SUBNET_MUL
     global IPV6_START, IPV6_SLICE_MUL, IPV6_SUBNET_MUL, IPV6_PREFIX
+    global IPV4_AS_IPV6_START
 
     addrs = CONFIG.get('address_pool', {})
     mac_start = addrs.get('mac_start', '52:54:00:00:00')
@@ -691,11 +698,13 @@ def process_address_pool():
     ipv4_start = addrs.get('ipv4_start', '172.16.0.0')
     IPV4_START = ipaddress.IPv4Address(ipv4_start)
 
-    ipv6_start = addrs.get('ipv6_start', 'fd00:aaaa::0')
+    ipv6_start = addrs.get('ipv6_stateless_start', 'fd00:aaaa::0')
     IPV6_START = ipaddress.IPv6Address(ipv6_start)
 
     ipv4_slice_prefix = int(addrs.get('ipv4_slice_prefix', 20))
     ipv4_prefix = int(addrs.get('ipv4_subnet_prefix', 24))
+    # NOTE: the config currently allows crazy shifting, however
+    # the bit opts might be faster than a mul
     IPV4_SLICE_MUL = 2**(32 - ipv4_slice_prefix)
     IPV4_SUBNET_MUL = 2**(32 - ipv4_prefix)
     IPV4_NETMASK = str(ipaddress.IPv4Network('0.0.0.0/' + str(ipv4_prefix))
@@ -705,33 +714,54 @@ def process_address_pool():
     mac_slice_extra_power = int(addrs.get('mac_slice_extra_power', 8))
     MAC_SLICE_MUL = 2**(32 - ipv4_slice_prefix + mac_slice_extra_power)
 
-    ipv6_subnet_balance = int(addrs.get('ipv6_subnet_balance', 0))
-    IPV6_PREFIX = 64 + ipv6_subnet_balance
-
-    IPV6_SLICE_MUL = 2**(128 - IPV6_PREFIX - (32 - ipv4_slice_prefix))
+    IPV6_SLICE_MUL = 2**(128 - IPV6_PREFIX + (32 - ipv4_slice_prefix))
     IPV6_SUBNET_MUL = 2**(128 - IPV6_PREFIX)
+    ipv4as6 = addrs.get('ipv6_from4_start', '0:0:0:0:0:ffff::0')
+    IPV4_AS_IPV6_START = ipaddress.IPv6Address(ipv4as6)
 
-    IPV6_PREFIX = 64 + ipv6_subnet_balance
+
+def get_int_mac(build_slice, net_id, offset):
+    return (MAC_START + build_slice*MAC_SLICE_MUL +
+            MAC_SUBNET_MUL * net_id + offset)
 
 
 def get_mac_for(build_slice, net_id, offset, delim=':'):
-    mac_int = (MAC_START + build_slice*MAC_SLICE_MUL +
-               MAC_SUBNET_MUL * net_id + offset)
-    # struct ?
-    mac_hex = "{:012x}".format(mac_int)
-    mac_str = delim.join(mac_hex[i:i+2] for i in range(0, len(mac_hex), 2))
+    mac_int = get_int_mac(build_slice, net_id, offset)
+    mac_bytes = mac_int.to_bytes(6, byteorder='big')
+    mac_str = delim.join("{:02x}".format(mac_bytes[i]) for i in range(0, 6))
     return mac_str
 
 
-def get_addr_for(build_slice, net_id, offset, ipv=4):
-    # net_id unused
-    if int(ipv) == 4:
+def get_ipv6_mac_based(build_slice, net_id, offset, base):
+    mac_int = get_int_mac(build_slice, net_id, offset)
+    mac_bytes = mac_int.to_bytes(6, byteorder='big')
+    subnet_bytes = bytes((mac_bytes[0] ^ 2, *mac_bytes[1:3],
+                          0xff, 0xfe, *mac_bytes[3:]))
+    subn = int.from_bytes(subnet_bytes, byteorder='big', signed=False)
+    rel = (build_slice*IPV6_SLICE_MUL + IPV6_SUBNET_MUL * net_id) + subn
+    return str(base + rel)
+
+
+def get_ipv6_ipv4_based(build_slice, net_id, offset):
+    rel = build_slice*IPV4_SLICE_MUL + IPV4_SUBNET_MUL * net_id + offset
+    ipv4_rel = int(IPV4_START + rel)
+    return str(IPV4_AS_IPV6_START + ipv4_rel)
+
+
+def get_addr_for(build_slice, net_id, offset, atype='ipv4'):
+    if atype == 'ipv4':
         rel = build_slice*IPV4_SLICE_MUL + IPV4_SUBNET_MUL * net_id + offset
         return str(IPV4_START + rel)
-    if int(ipv) == 6:
-        rel = build_slice*IPV6_SLICE_MUL + IPV6_SUBNET_MUL * net_id + offset
-        return str(IPV6_START + rel)
-    raise NotImplementedError("Not implemented ip version " + ipv)
+    if atype == 'ipv6stateless':
+        return get_ipv6_mac_based(build_slice, net_id, offset,
+                                  IPV6_START)
+    if atype == 'ipv6local':
+        return get_ipv6_mac_based(build_slice, net_id, offset,
+                                  IPV6_LINK_LOCAL_START)
+    if atype == 'ipv4as6':
+        return get_ipv6_ipv4_based(build_slice, net_id, offset)
+
+    raise NotImplementedError("Not implemented ip version " + atype)
 
 
 def virt_domain_name(build_slice, hostname):
@@ -744,13 +774,18 @@ def generate_node(build_slice, offset, machine_type_name):
     vm_uuid = str(uuid.uuid4())
     hostname = '{}-{:02x}'.format(machine_type_name, offset)
     access_ip = None
-    ip_version = 4
+
+    nf = CONFIG.get('network_flags', {})
+    ap = CONFIG.get('address_pool', {})
+    defualt_atype = ap.get('prefered_address', 'ipv4')
+    # allways the first network is the one we want to ssh
     if 'nets' in machine_type:
         if machine_type['nets']:
             net = machine_type['nets'][0]
-            ip_version = CONFIG.get('network_flags', {}).get('ip_version', 4)
+            atype = nf.get(net, {}).get('preferred_address', defualt_atype)
             access_ip = get_addr_for(build_slice,
-                                     NAME_TO_ID[net], offset, ipv=ip_version)
+                                     NAME_TO_ID[net], offset, atype=atype)
+
     config_drive_path = get_path('cd')
     console_log_path = get_path('log')
     node = {'console_log': os.path.join(console_log_path,
@@ -766,20 +801,21 @@ def generate_node(build_slice, offset, machine_type_name):
             'offset': offset,
             'build_slice': build_slice,
             'access_ip': access_ip,
-            'access_ip_version': ip_version
-            # allways the first network is the one we want to ssh
+            'access_ip_version':  4 if atype == 'ipv4' else 6
             }
     node['interfaces'] = []
     nets = machine_type.get('nets', [])
     for net in nets:
-        ip_version = CONFIG.get('network_flags', {}).get('ip_version', 4)
+        atype = nf.get(net, {}).get('preferred_address', defualt_atype)
         access_ip = get_addr_for(build_slice,
-                                 NAME_TO_ID[net], offset, ipv=ip_version)
+                                 NAME_TO_ID[net], offset, atype=atype)
         node['interfaces'].append({
             'bridge': get_br_name(build_slice, net),  # del
             'network': net,
             'mac': get_mac_for(build_slice, NAME_TO_ID[net], offset),
-            'ip_version': ip_version,
+            'ip_version': 4 if atype == 'ipv4' else 6,
+            'ipv4_addr': get_addr_for(build_slice,
+                                      NAME_TO_ID[net], offset, atype='ipv4'),
             'access_ip': access_ip})
     dev = 'vda'
     # TODO: add (back) the ability to select older version from the slot

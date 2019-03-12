@@ -116,42 +116,39 @@ def generate_libvirt_dom_xml(node):
 
 
 def netxml_from(base):
-    reservations = base.get('reservations', {})
+    reservations = base.get('reservations', {}).get(4, [])
     internet_access = base.get('internet_access', False)
-    address_serving_4 = reservations.get(4, [])
-    address_serving_6 = reservations.get(6, [])
+    address_serving_4 = bool(reservations)
+    address_serving_6 = base.get('address_serving_6', True)
     mtu = base.get('mtu', 9090)
     x = []
     x.append("""<network ipv6='yes'>
 <name>{net_name}</name>"
 <mtu size='{mtu}'/>
-<bridge name='{net_name}' stp='off'/>""".format(net_name=base['name'], mtu=mtu))
+<mac address='{mac}'/>
+<bridge name='{net_name}' stp='off'/>""".format(net_name=base['name'], mtu=mtu,
+                                                mac=base['mac']))
     if internet_access:
         x.append("<forward mode='nat'/>")
     if address_serving_4:
-        x.append("""<mac address='{mac}'/>
-<ip address='{ip}' netmask='{mask}'>
+        x.append("""<ip address='{ip}' netmask='{mask}'>
 <dhcp>""".format(mac=base['mac'], mask=base['ipv4_mask'],
                  ip=base['ipv4_address']))
 
-        for entry in address_serving_4:
+        for entry in reservations:
             s = "<host mac='{mac}' name='{name}' ip='{ip}'/>".format(**entry)
             x.append(s)
         x.append('</dhcp>\n</ip>')
-
+    # mac based address serving is not supported by libvirt
+    # dhcp6 before rfc6939 does not really considered this case and likely
+    # not just libvirt misses it
     if address_serving_6:
-        # dhcp_ip = base['ipv4_address']
-        # dhcp6_ip = base['ipv6_address']
-        x.append("""<mac address='{mac}'/>
-<ip family="ipv6" address="{ip}" prefix="{prefix}"/>
-<dhcp>""".format(mac=base['mac'], mask=base['ipv6_prefix'],
-                 ip=base['ipv6_address']))
-
-        for entry in address_serving_6:
-            s = ("<host family='ipv6' mac='{mac}'"
-                 " name='{name}' ip='{ip}'/>".format(**entry))
-            x.append(s)
-        x.append('</dhcp>\n</ip>')
+        x.append("""<ip family="ipv6" address="{ip}" prefix="64"/>
+""".format(mac=base['mac'], ip=base['ipv6_address']))
+    # for entry in address_serving_6:
+    #   s = ("<host family='ipv6' mac='{mac}'"
+    #        " name='{name}' ip='{ip}'/>".format(**entry))
+    #   x.append(s)
 
     x.append('</network>')
     return '\n'.join(x)

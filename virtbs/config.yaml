@@ -13,9 +13,18 @@ address_pool:
         ipv4_slice_prefix: 20  # 255.255.240.0
         ipv4_subnet_prefix: 24  # 255.255.255.0
         mac_slice_extra_power: 8  # add 4 bit extra above the nets for the mac pool, just for `ip addressles` interfaces
-        ipv6_start: 'fd00:aaaa::0'
-        ipv6_subnet_balance: 0  # each subnet is /64 by default, it can be +- shift, same number of ipv6 subnet supported as ipv4
+        # for statless
+        # assuming 64 bit sub subnet prefixes
+        # The lower bits from first 64 is used speedling as subnet pool
+        # It could be a list in the future..
+        ipv6_stateless_start: 'fd00:aaaa::0'
+        # for dual stack (or with configrive for spcial usage)
+        ipv6_from4_start: '0:0:0:0:0:ffff::0'
         bmc_port_pase: 8192
+        # options ipv4, ipv4as6, ipv6local, ipv6stateless, ..
+        prefered_address: ipv4
+        ipv6_stateless_default_enabled: False
+        ipv4_address_serving_default_enabled: False
 
 image_flow:
     f29:
@@ -83,8 +92,10 @@ image_flow:
 network_flags:
    mynet:
       internet_access: True
-      address_serving: True
-      ip_version: 4
+      address_serving_4: True
+      # stateless
+      address_serving_6: False
+      preferred_address: ipv4
       mtu: 1500
 
    net_team_1:
