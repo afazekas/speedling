@@ -1,3 +1,4 @@
 autopep8
-pep8
+pycodestyle
 pyflakes
+isort

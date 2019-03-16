@@ -46,7 +46,7 @@ def _section_to_str(name, section_dict):
 
 
 # TODO: white space ini rules needs to be verified
-SECTION_NAME_RE = re.compile('\[(.*)\][\r\n]+')
+SECTION_NAME_RE = re.compile('\\[(.*)\\][\r\n]+')
 SECTION_ARG_ANCHOR = re.compile('#([^ =]+)[= ].*[\r\n]+')
 VALID_OTHER_START = set(('\n', '\r'))
 

@@ -103,9 +103,9 @@ class Tempest(facility.OpenStack):
         image_file = tempest_git_dir + '/etc/cirros.img'
         admin_snippet = util.userrc_script('admin')
         image_uuid = localsh.ret(admin_snippet +
-                                 "openstack image create cirros --public --file {image_file} --disk-format qcow2 | awk '/\| id/{{print $4}}'".format(image_file=image_file))
+                                 "openstack image create cirros --public --file {image_file} --disk-format qcow2 | awk '/\\| id/{{print $4}}'".format(image_file=image_file))
         image_alt_uuid = localsh.ret(admin_snippet +
-                                     "openstack image create cirros_alt --public --file {image_file} --disk-format qcow2 | awk '/\| id/{{print $4}}'".format(image_file=image_file))
+                                     "openstack image create cirros_alt --public --file {image_file} --disk-format qcow2 | awk '/\\| id/{{print $4}}'".format(image_file=image_file))
         return (image_uuid.strip(), image_alt_uuid.strip())
 
     def do_ensure_flavors(cname):

@@ -3,6 +3,7 @@ import os
 import re
 import time
 import urllib
+from shlex import quote as cmd_quote
 
 from speedling import conf
 from speedling import facility
@@ -157,7 +158,7 @@ MYSQL_PORT="3306"
 ERR_FILE="/tmp/clustercheckuser_42328756"
 AVAILABLE_WHEN_DONOR=0
 AVAILABLE_WHEN_READONLY=0
-DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=util.cmd_quote(password))
+DEFAULTS_EXTRA_FILE=/etc/my.cnf""".format(pwd=cmd_quote(password))
 
     def etccfg_content(self):
         super(MariaDB, self).etccfg_content()

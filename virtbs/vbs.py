@@ -2,7 +2,9 @@ from __future__ import print_function
 
 import argparse
 import errno
+import functools
 import grp
+import ipaddress
 # is ujson still the fastest ?
 # anyjson did not had dump
 import json
@@ -12,22 +14,19 @@ import pwd
 import sys
 import uuid
 import xml.etree.ElementTree as ET
-import functools
 from collections import defaultdict
-import ipaddress
 
 import libvirt
 import yaml
 
 import __main__
+from virtbs import xmlvirt
 # WARNING: improper shell escapes, evil guy can be evil!
 from speedling import cfgfile
 from speedling import fetch
 from speedling import localsh
 from speedling import netutils
 from speedling import util
-
-import xmlvirt
 
 try:
     from shlex import quote as cmd_quote

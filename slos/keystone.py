@@ -1,4 +1,5 @@
 import logging
+from shlex import quote as cmd_quote
 
 import speedling.tasks
 from speedling import conf
@@ -130,7 +131,7 @@ class Keystone(facility.OpenStack):
         self = facility.get_component(cname)
         self.have_content()
         localsh.run("keystone-manage bootstrap --bootstrap-password %s" %
-                    util.cmd_quote(util.get_keymgr()(self.name, 'admin@default')))
+                    cmd_quote(util.get_keymgr()(self.name, 'admin@default')))
 
     def etc_keystone_keystone_conf(self): return {
         'DEFAULT': {'debug': True},

@@ -49,10 +49,10 @@ def hosts_with_component(component):
 
 
 def hosts_with_any_service(services):
-    l = len(services)
-    if not l:
+    le = len(services)
+    if not le:
         return set()
-    if l == 1:
+    if le == 1:
         return hosts_with_service(services[0])
     ckey = tuple(sorted(services))
     if ckey in HOST_WITH_SERVICE_CACHE:

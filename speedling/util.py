@@ -1,7 +1,7 @@
 import collections
 import os
-import re
 import random
+import re
 import threading
 from collections import abc
 
@@ -10,11 +10,6 @@ from speedling import cfgfile
 from speedling import conf
 from speedling import inv
 from speedling import pkgutils
-
-try:
-    from shlex import quote as cmd_quote
-except ImportError:
-    from pipes import quote as cmd_quote  # noqa others can use form here
 
 RE_HUMAN_SIZE = re.compile(r'(\d+)(.*)')
 UNITS = {'k': 1024, 'm': 2**20, 'g': 2**30, 't': 2**40, 'p': 2**50, 'e': 2**60}

@@ -5,7 +5,6 @@ import threading
 import time
 from collections import abc
 from collections import defaultdict
-from copy import deepcopy
 
 from speedling import cfgfile
 from speedling import conf

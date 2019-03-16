@@ -4,7 +4,7 @@ import contextlib
 import re
 import shlex
 
-SECTION_NAME_RE = re.compile('\[(.*)\][ \t\r\n]+')
+SECTION_NAME_RE = re.compile('\\[(.*)\\][ \t\r\n]+')
 
 
 def _parse_value(v):
@@ -21,20 +21,20 @@ def parse_ansible_invetory_ini(source):
     group_vars = collections.defaultdict(dict)
     host_in_group = collections.defaultdict(list)  # multi group member allowed
     inherit_from = collections.defaultdict(set)
-    l = 42
+    li = 42
     in_group = 'all'
 
     def child_porcessor():
-        if not l.isspace():
-            p = l.lstrip().split(' ', 1)[0]
+        if not li.isspace():
+            p = li.lstrip().split(' ', 1)[0]
             inherit_from[p].add(in_group)
 
     def group_processor():
-        foo = shlex.split(l)  # without comments
+        foo = shlex.split(li)  # without comments
         ll = len(foo)
         if not ll:
-            if not l.isspace():
-                raise Exception('Invalid Syntax3 :' + l)
+            if not le.isspace():
+                raise Exception('Invalid Syntax3 :' + li)
         host = foo[0]
         host_in_group[in_group].append(host)
         if len(foo) > 1:
@@ -42,16 +42,16 @@ def parse_ansible_invetory_ini(source):
             for kv in foo[1:]:
                 parts = kv.split("=", 1)
                 if len(parts) != 2:
-                    raise Exception('Invalid Syntax2 :' + l)
+                    raise Exception('Invalid Syntax2 :' + li)
                 k = _parse_value(parts[0])
                 v = _parse_value(parts[1])
                 host_vars[host][k] = v
 
     def group_var_processor():
-        parts = l.split("=", 1)
+        parts = li.split("=", 1)
         if len(parts) != 2:
-            if not l.isspace():
-                raise Exception('Invalid Syntax:' + l)
+            if not li.isspace():
+                raise Exception('Invalid Syntax:' + li)
         k = _parse_value(parts[0])
         v = _parse_value(parts[1].lstrip())
         group_vars[in_group][k] = v
@@ -61,14 +61,14 @@ def parse_ansible_invetory_ini(source):
     not_intersting_ch = {'\r', '\n', '#'}
     with contextlib.closing(open(source)) as f:
         while True:
-            l = f.readline(131072)
-            if l == '':
+            le = f.readline(131072)
+            if li == '':
                 break
-            fc = l[0]
+            fc = li[0]
             if fc in not_intersting_ch:
                 continue
             if fc == '[':
-                m = SECTION_NAME_RE.match(l)
+                m = SECTION_NAME_RE.match(li)
                 current_section = m.group(1)
                 parts = current_section.split(':', 1)
                 if len(parts) == 1:

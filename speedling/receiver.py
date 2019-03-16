@@ -34,8 +34,8 @@ class stream_reader(object):
         # <int64size><data><int64size><data><0size_end>
         if self.chunk_remainig > 0:
             buf = os.read(self.readerfd, self.chunk_remainig)
-            l = len(buf)
-            self.chunk_remainig -= l
+            le = len(buf)
+            self.chunk_remainig -= le
             return buf
         next_size = read_ll(self.readerfd)
         if not next_size:
@@ -43,8 +43,8 @@ class stream_reader(object):
             return b''
 
         buf = os.read(self.readerfd, min(next_size, size))
-        l = len(buf)
-        self.chunk_remainig = next_size - l
+        le = len(buf)
+        self.chunk_remainig = next_size - le
         return buf
 
 
@@ -150,8 +150,8 @@ def input_handler():
             return
         while to_read:
             chunk = os.read(INPUTFD, to_read)
-            l = len(chunk)
-            if not l:
+            le = len(chunk)
+            if not le:
                 os.close(INPUTFD)
                 print('Receving socket closed unexpectedly')
                 terminate = True

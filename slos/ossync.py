@@ -99,10 +99,10 @@ def user_dom_sync(auth, user_domain, dry_run=False, endpoint_override=None):
         # case insestive name
         assert domain_name not in domain_to_id
         dl = keystone.domains.list(name=domain_name)
-        l = len(dl)
+        le = len(dl)
         desc = domain.get('Description', '')
-        assert l < 2
-        if l == 1:
+        assert le < 2
+        if le == 1:
             dom = dl[0]
             if dom.description != desc or dom.name != domain_name:  # case
                 keystone.domains.update(dom.id,
@@ -119,9 +119,9 @@ def user_dom_sync(auth, user_domain, dry_run=False, endpoint_override=None):
                 lc_proj_name = project_name.lower()
                 assert (dom_lc_name, lc_proj_name) not in domain_project_to_id
                 pl = keystone.projects.list(domain=dom_id, name=project_name)
-                l = len(pl)
-                assert l < 2
-                if l == 0:
+                le = len(pl)
+                assert le < 2
+                if le == 0:
                     p = keystone.projects.create(project_name,
                                                  dom_id,
                                                  description=desc)
@@ -142,9 +142,9 @@ def user_dom_sync(auth, user_domain, dry_run=False, endpoint_override=None):
                 lc_grp_name = group_name.lower()
                 assert (dom_lc_name, lc_grp_name) not in domain_group_to_id
                 gl = keystone.groups.list(domain=dom_id, name=group_name)
-                l = len(gl)
-                assert l < 2
-                if l == 0:
+                le = len(gl)
+                assert le < 2
+                if le == 0:
                     g = keystone.groups.create(group_name,
                                                dom_id,
                                                description=desc)
@@ -182,10 +182,10 @@ def user_dom_sync(auth, user_domain, dry_run=False, endpoint_override=None):
     for domain_name, domain in user_domain.items():
         dom_id = domain_to_id[domain_name]
         jobs = list(domain['users'].items())
-        l = len(jobs)
+        le = len(jobs)
         # creating new fork for each 4 user
         # this was the easiest to add without huge reformating
-        f = l
+        f = le
         while (f > 0):
             s = f - 4
             if s < 0:
@@ -200,8 +200,8 @@ def user_dom_sync(auth, user_domain, dry_run=False, endpoint_override=None):
                                                   endpoint_override=e)
                 for user_name, user in items:
                     ul = keystone.users.list(domain=dom_id, name=user_name)
-                    l = len(ul)
-                    assert l < 2
+                    le = len(ul)
+                    assert le < 2
                     user_rec = {}
 
                     relevant_args = ('email', 'description', 'password')
@@ -222,7 +222,7 @@ def user_dom_sync(auth, user_domain, dry_run=False, endpoint_override=None):
                     existing_domain_roles = {}
                     member_of = set()
 
-                    if l == 0:
+                    if le == 0:
                         # TODO: check is the inherited roles have any relavant
                         # effect
                         u = keystone.users.create(user_name,

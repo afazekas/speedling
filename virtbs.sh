@@ -8,4 +8,4 @@ if `which python3 &>/dev/null`; then
 PYTHON=python3
 fi
 
-sudo PYTHONPATH=$SCRIPTPATH  $PYTHON ./virtbs/virtbs.py $*
+sudo PYTHONPATH=$SCRIPTPATH  $PYTHON ./virtbs/vbs.py $*

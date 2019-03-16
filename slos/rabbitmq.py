@@ -1,6 +1,7 @@
 import logging
 import time
 import urllib.parse
+from shlex import quote as cmd_quote
 
 from speedling import facility
 from speedling import localsh
@@ -102,7 +103,7 @@ class RabbitMQ(facility.Messaging):
     # TODO: WARNING guest:guest not deleted/changed!
     def do_rabbit_addusers(cname):
         self = facility.get_component(cname)
-        pwd = util.cmd_quote(util.get_keymgr()(self.name, 'openstack'))
+        pwd = cmd_quote(util.get_keymgr()(self.name, 'openstack'))
         localsh.run("""rabbitmqctl add_user openstack {passwd} ||
                     rabbitmqctl change_password openstack {passwd} &&
                     rabbitmqctl set_permissions -p / openstack ".*" ".*" ".*"
@@ -120,9 +121,10 @@ class RabbitMQ(facility.Messaging):
         # TODO: parse erlang data
         return [c for c in candidates if ('rabbit@' + c) in r]
 
-    def etc_systemd_system_rabbitmq_server_service_d_limits_conf(self, ): return {
-        'Service': {'LimitNOFILE': 16384}
-    }
+    def etc_systemd_system_rabbitmq_server_service_d_limits_conf(self, ):
+        return {
+            'Service': {'LimitNOFILE': 16384}
+        }
 
     def etc_systemd_system_epmd_socket_d_ports_conf_ports_conf(self): return {
         'Socket': {'ListenStream': ['', '[::]:4369']}

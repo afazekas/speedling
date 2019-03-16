@@ -181,10 +181,10 @@ def sender(ssh_ctx):
                 stream = ans['stream']
                 while True:
                     buf = stream.read(65536)
-                    l = len(buf)
-                    if not l:
+                    le = len(buf)
+                    if not le:
                         break
-                    size = int(l).to_bytes(8, byteorder='little')
+                    size = int(le).to_bytes(8, byteorder='little')
                     buf = size + buf
                     pipe.write(buf)  # [int64 + chunk]+ ZERO_SIZE
                     pipe.flush()

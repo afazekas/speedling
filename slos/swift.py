@@ -229,8 +229,8 @@ class Swift(facility.OpenStack, facility.StorageBackend):
         # this is from the all in script, it needs to be completly rewritten
         object_ip = self.get_addr_for(self.get_this_inv(), 'backing_object',
                                       net_attr='swift_object_network')
-        replica_ip = self.get_addr_for(self.get_this_inv(), 'replication',  # NOQA
-                                       net_attr='swift_object_replica_network')
+        # replica_ip = self.get_addr_for(self.get_this_inv(), 'replication',
+        #                                net_attr='swift_object_replica_network')
         self.have_content()
         script = """
 INSTALLER_DATA_DIR="%s"
