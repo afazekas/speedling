@@ -3,7 +3,6 @@ from __future__ import print_function
 import argparse
 import errno
 import functools
-import grp
 import ipaddress
 # is ujson still the fastest ?
 # anyjson did not had dump
@@ -20,13 +19,13 @@ import libvirt
 import yaml
 
 import __main__
-from virtbs import xmlvirt
 # WARNING: improper shell escapes, evil guy can be evil!
 from speedling import cfgfile
 from speedling import fetch
 from speedling import localsh
 from speedling import netutils
 from speedling import util
+from virtbs import xmlvirt
 
 try:
     from shlex import quote as cmd_quote
@@ -51,9 +50,6 @@ SSH_PUBLIC_KEY_LIST_PATH_REL = '/id_rsa.pub'  # ro file, can have multiple keys
 
 SSH_PRIVATE_KEY_PATH_REL = '/id_rsa'  # ro file
 
-IMAGE_OWNER = pwd.getpwnam('qemu').pw_uid
-IMAGE_GROUP = grp.getgrnam('qemu').gr_gid
-
 
 # WARN: muxes are different now
 @functools.lru_cache()
@@ -76,7 +72,6 @@ def bmc_port(bslice, offset):
 def qcow2_to_raw(src, dst):
     localsh.run("qemu-img convert -f qcow2 -O raw -S 4k {src} {dst}".format(
         src=cmd_quote(src), dst=cmd_quote(dst)))
-    os.chown(dst, IMAGE_OWNER, IMAGE_GROUP)
 
 
 def image_info(img):
@@ -103,7 +98,6 @@ def create_backed_qcow2(src, dst, size='10G', bfmt='raw'):
         localsh.run("qemu-img create -f qcow2 -o 'backing_fmt={bfmt},"
                     "backing_file={src}' '{dst}'".format(
                         src=src, dst=dst, bfmt=bfmt))
-    os.chown(dst, IMAGE_OWNER, IMAGE_GROUP)
 
 
 # NOTE: It may default to sparse raw in the future
@@ -114,7 +108,6 @@ def create_empty_disk(dst, size, fmt='qcow2'):
     else:
         localsh.run("qemu-img create -f {fmt} '{dst}' '{size}'".format(
             fmt=fmt, dst=dst, size=size))
-    os.chown(dst, IMAGE_OWNER, IMAGE_GROUP)
 
 
 # TODO: clean on exception
@@ -182,15 +175,15 @@ def create_cloud_config_image(node, ssh_keys):
           "local-hostname: {hostname}\n").format(hostname=hostname,
                                                  vm_uuid=vm_uuid)
 
-    cfgfile.content_file(cif, ci)
-    cfgfile.content_file(mif, mi)
+    cfgfile.put_to_file(cif, ci)
+    cfgfile.put_to_file(mif, mi)
     file_map = [('user-data', cif), ('meta-data', mif)]
     files_to_iso(file_map, target)
     return target
 
 
 def get_libvirt_conn():
-    conn = libvirt.open(None)
+    conn = libvirt.open('qemu:///system')
     if not conn:
         print('Failed to open connection to the hypervisor', file=sys.stderr)
         sys.exit(1)
@@ -354,7 +347,7 @@ def virt_costumize_script(image, script_file, args_str='', log_file=None):
 
 
 # incomplete, temporary
-# these dics will be originated from file and will be json friendy
+# these dics will be originated from some file and will be json friendy
 def __filter_to_json(d):
     di = {}
     for k, v in d.items():
@@ -368,8 +361,7 @@ def __filter_to_json(d):
 
 def get_image_data_dir(name):
     lib_dir = os.path.join(get_path("library"), name)
-    cfgfile.ensure_path_exists(lib_dir, owner=IMAGE_OWNER,
-                               group=IMAGE_GROUP, mode=0o755)
+    os.makedirs(lib_dir, exist_ok=True)
     return lib_dir
 
 
@@ -407,13 +399,13 @@ def image_virt_customize(name, data, image_tag=None, renew=False):
 
     assert script  # TODO: raise a joke
     script_file = os.path.join(img_dir, build_id + '-build.sh')
-    cfgfile.content_file(script_file, script)
+    cfgfile.put_to_file(script_file, script)
     print('Customizing image for {} at {}'.format(name, build_image))
     args_str = data.get('script_arguments', '')
     virt_costumize_script(build_image, script_file, args_str, build_log)
 
     di = __filter_to_json(data)
-    cfgfile.content_file(build_image + '-data.json', json.dumps(di))
+    cfgfile.put_to_file(build_image + '-data.json', json.dumps(di))
     tmp_link = build_image + '-lnk'
     os.symlink(build_image, tmp_link)
     os.rename(tmp_link, default_path)
@@ -496,9 +488,10 @@ def wipe_slice(build_slice):
         if net.name().startswith(ss):
             try:
                 net.destroy()
+            except libvirt.libvirtError:
                 net.undefine()
-            except libvirt.libvirtError as e:
-                print(net.name() + str(e))
+            else:
+                net.undefine()
     # TODO: fork the vbmc handling
     if VIRTBMC_ENABLED:
         vbmc_manager = vbmc.VirtualBMCManager()
@@ -524,18 +517,17 @@ def generate_ansible_inventory(nodes, common_opts, target_file):
     stream.write('localhost ansible_connection=local\n')
     group_members['local'].append('localhost')
     for m in nodes:
-        if not m.get('blank', False):
-            assert m['hostgroup'] not in {'local', 'virtbs'}
-            group_members[m['hostgroup']].append(
-                m['hostname'])
-            group_members['virtbs'].append(m['hostname'])
-            stream.write(m['hostname'])
+        assert m['hostgroup'] not in {'local', 'virtbs'}
+        group_members[m['hostgroup']].append(
+            m['hostname'])
+        group_members['virtbs'].append(m['hostname'])
+        stream.write(m['hostname'])
 
-            def param_write(key, value):
-                stream.write(' ' +
-                             ('='.join((key, value.join(("'", "'"))))))
-            param_write('ansible_ssh_host', m['access_ip'])
-            stream.write('\n')
+        def param_write(key, value):
+            stream.write(' ' +
+                         ('='.join((key, value.join(("'", "'"))))))
+        param_write('ansible_ssh_host', m['access_ip'])
+        stream.write('\n')
 
     for group, memebers in group_members.items():
         stream.write('[%s]\n' % group)
@@ -559,26 +551,25 @@ def generate_ansible_inventory_speedling(machines, build_slice,
         mac = get_mac_for(build_slice, 0x0, m['offset'])
         networks = {'access': {'if_lookup': {'mac': mac},
                                'addresses': [m['access_ip']]}}
-        if not m.get('blank'):
-            assert m['hostgroup'] not in {'local', 'virtbs'}
-            group_members[m['hostgroup']].append(
-                m['hostname'])
-            group_members['virtbs'].append(m['hostname'])
-            stream.write(m['hostname'])
+        assert m['hostgroup'] not in {'local', 'virtbs'}
+        group_members[m['hostgroup']].append(
+            m['hostname'])
+        group_members['virtbs'].append(m['hostname'])
+        stream.write(m['hostname'])
 
-            def param_write(key, value):
-                stream.write(' ' +
-                             ('='.join((key, value.join(("\"'", "'\""))))))
+        def param_write(key, value):
+            stream.write(' ' +
+                         ('='.join((key, value.join(("\"'", "'\""))))))
 
-            def param_write_eval(key, value):
-                value = str(value)
-                stream.write(' ' +
-                             ('='.join((key, value.join(('"', '"'))))))
+        def param_write_eval(key, value):
+            value = str(value)
+            stream.write(' ' +
+                         ('='.join((key, value.join(('"', '"'))))))
 
-            param_write('ansible_ssh_host', m['access_ip'])
-            param_write('sl_ssh_address', m['access_ip'])
-            param_write_eval('sl_networks', networks)
-            stream.write('\n')
+        param_write('ansible_ssh_host', m['access_ip'])
+        param_write('sl_ssh_address', m['access_ip'])
+        param_write_eval('sl_networks', networks)
+        stream.write('\n')
 
     for group, memebers in group_members.items():
         stream.write('[%s]\n' % group)
@@ -615,7 +606,7 @@ def populate_reservations():
     ap = CONFIG.get('address_pool', {})
     default_4 = ap.get('ipv4_address_serving_default_enabled', False)
     for node in NODES:
-        if node.get('blank', False):
+        if node.get('disable_address_serving', False):
             continue
         if 'hostname' not in node:
             continue
@@ -800,8 +791,9 @@ def generate_node(build_slice, offset, machine_type_name):
             'offset': offset,
             'build_slice': build_slice,
             'access_ip': access_ip,
-            'access_ip_version':  4 if atype == 'ipv4' else 6
             }
+    if access_ip:
+        node['access_ip_version'] = 4 if atype == 'ipv4' else 6
     node['interfaces'] = []
     nets = machine_type.get('nets', [])
     for net in nets:
@@ -908,8 +900,8 @@ def process_request(build_slice, request):
     # TODO persist pattern mux
     vbs_root = get_path()
     ssh_mux_base_path = os.path.join(vbs_root, 'ssh_mux', str(build_slice))
-    cfgfile.ensure_path_exists(ssh_mux_base_path, owner=IMAGE_OWNER,
-                               group=IMAGE_GROUP, mode=0o1777)
+    os.makedirs(ssh_mux_base_path, exist_ok=True)
+    os.chmod(ssh_mux_base_path, 0o1777)
     # switch to key value to be ssh conf friendly
     # TODO: move to some cfg file
     ssh_general_options = {'ForwardAgent': 'yes',
@@ -983,8 +975,7 @@ def create_workspace():
     dirs = ['downloads', 'library', '_base',
             'live', 'cd', 'log', 'keys']
     for d in dirs:
-        cfgfile.ensure_path_exists(root + d, owner=IMAGE_OWNER,
-                                   group=IMAGE_GROUP, mode=0o755)
+        os.makedirs(root + d, exist_ok=True)
 
     # is priv key exists
     base_key_path = get_path("keys")

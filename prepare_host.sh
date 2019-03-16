@@ -8,3 +8,6 @@ dnf install -y $PKGS || yum install -y $PKGS
 # pip3 install virtualbmc # Optional
 
 systemctl start libvirtd
+
+mkdir /srv/virtbs
+#chown <your user>/srv/virtbs

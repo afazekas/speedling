@@ -1,10 +1,6 @@
 paths:
     virtbs_root: /srv/virtbs
 
-owner:
-    default_group: qemu
-
-
 address_pool:
         mac_start: '52:54:00:00:00'
         ipv4_start: '172.16.0.0'
@@ -126,6 +122,7 @@ machine_matrix:
             memory: 8192
             vcpu: 8
             disable_address_serving: False
+            nets: [mynet]
         # cloud image with basic tools
         minim:
             memory: 8192
@@ -140,7 +137,6 @@ machine_matrix:
             disable_address_serving: False
         # multi disk node for swift/ceph
         disk:
-            blank: False
             memory: 4096
             vcpu: 2
             nets: [mynet, 'data', 'replicate']
@@ -154,10 +150,8 @@ machine_matrix:
                   size: '4G'
         # machine needs to be network booted
         pxe_compute:
-            blank: True
             memory: 4096
             vcpu: 2
-            access_net: mynet
             disable_address_serving: True
             disks:
                disk0:

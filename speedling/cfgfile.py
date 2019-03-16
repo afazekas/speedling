@@ -7,6 +7,7 @@ import os
 import pwd  # getent passwd
 import re
 import stat
+import tempfile
 import uuid
 
 try:
@@ -56,6 +57,48 @@ VALID_OTHER_START = set(('\n', '\r'))
 def ini_file_sync(target_path, *args, **kwargs):
     kwargs['template_file'] = target_path
     return ini_gen(target_path, *args, **kwargs)
+
+# as current user
+
+
+def put_to_file(filepath, data, mode=None):
+    if isinstance(data, str):
+        data = bytes(data, 'utf-8')
+    full_path = os.path.abspath(filepath)
+    dire = os.path.dirname(full_path)
+    (fd, full_tmp) = tempfile.mkstemp(dir=dire)
+    le = len(data)
+    re = os.write(fd, data)
+    # signal friendly, but I need to check is python
+    # really tries to write all
+    if le != re:
+        written = re
+        while True:
+            re = os.write(fd, data[written:])
+            written += re
+            if written == le:
+                break
+            # expecting blocking writes
+            if not re:
+                raise Exception("Less than expected was written")
+
+    os.rename(full_tmp, full_path)
+    if mode is not None:
+        # NOTE: mktmp would be able to apply a mode at open time
+        # the thing is, it would be applyed to the default group which
+        # is not something we allways want
+        os.fchmod(fd, mode)
+
+
+# dict of dict , both sorted
+def simple_ini(target_path, ini_data, mode=None):
+    ks = sorted(ini_data.keys())
+    # TODO: handle Ordered dict specially
+    comp = []
+    for k in ks:
+        comp.append(_section_to_str(k, ini_data[k]))
+    txt = '\n'.join(comp)
+    put_to_file(target_path, txt, mode)
 
 
 #   ~500 cfg_file/sec/core  (3k line files)

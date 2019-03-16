@@ -35,8 +35,9 @@ virtbs
 ------
 
 Virt build slices, a simple script for managing virtual machines and images
-on a single big machine. The only way to configure it is changing the source ATM.
-It requires root privileges to create bridges (libvirt) and virtual machines.
+on a single strong machine while using consistent network addresses.
+It requires libvirt system privileges in order to create bridges.
+Typically enough to add your user to the libvirt group.
 
 .. code:: bash
 
@@ -61,7 +62,7 @@ The execution is parallel, maintained by task threads.
 Most component has it own thread, some cases waits *wants* other threads to complete
 before continuing it's task.
 
-The receiver nodes expected to have limited view of the Univers,
+The receiver nodes expected to have limited view of the Universe,
 they are not knowing every other nodes and/or every credentials.
 
 The *task_* prefixed functions expected to call *do_* prefixed functions on the
@@ -80,7 +81,7 @@ Basic flow with local vm creation:
     git clone https://github.com/afazekas/speedling
     cd speedling
     ./prepare_host.sh  # only first time for installing dependencies
-    ./test_aio.sh  # caretes virtual machine, uses sudo
+    ./test_aio.sh  # creates virtual machine and libvirt bridge networks
     ssh -F sshconf-bs1 controller-02
     source state/admin-openrc.sh
     openstack image list
