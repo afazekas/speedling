@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import argparse
+import ast
 import errno
 import functools
 import ipaddress
@@ -1026,21 +1027,48 @@ image_download.flow_exportd = True
 image_virt_customize.flow_exportd = True
 
 
+class MyAppend(argparse.Action):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reset_dest = False
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if not self.reset_dest:
+            setattr(namespace, self.dest, [])
+            self.reset_dest = True
+        getattr(namespace, self.dest).append(values)
+
+
 def gen_parser():
     parser = argparse.ArgumentParser(
         description='Virt Build Slices the VM manager')
     parser.add_argument('-s', '--slice',
-                        help='Receiver mode act on remote host',
+                        help='Slice number to use',
                         type=int,
                         default=1)
     parser.add_argument('-c', '--config',
-                        help='Receiver mode act on remote host',
-                        default="virtbs/config.yaml")
+                        help=('Configuration file, multiple can be specified'
+                              'the override each other in the specified order'),
+                        action=MyAppend,
+                        default=["virtbs/config.yaml"])
+    parser.add_argument('-e', '--extra-string',
+                        help='Overrides a configuration parameter '
+                        ' with the string argument for'
+                        ' example conf.machine_types.compute.foo=bar',
+                        action='append',
+                        default=[])
+    parser.add_argument('-E', '--extra-literal',
+                        help=('Overrides a configuration parameter '
+                              ' with a python literal for example:'
+                              ' -E conf.machine_types.compute.memory=42 OR'
+                              ' -E conf.machine_types.compute.list=[42,13]'),
+                        action='append',
+                        default=[])
     # required=True not in py3.6
     sps = parser.add_subparsers(help='sub-command help', dest='command')
     sps.add_parser('wipe', help='Destroys the slice')
     cycle_parser = sps.add_parser('cycle',
-                                  help='Destroys the  slice, and creates a new one')
+                                  help='Destroys the slice, and creates a new one')
     cycle_parser.add_argument('matrix',
                               help="',' sperated list of machine matrixes from the config file")
     cycle_parser.add_argument('topology',
@@ -1057,7 +1085,48 @@ def main():
     global machine_types
     parser = gen_parser()
     args = parser.parse_args(sys.argv[1:])
-    config = CONFIG = yaml.load(open(args.config))
+    config = CONFIG = yaml.load(open(args.config[0]))
+    for extra_cfg in args.config[1:]:
+        extra = yaml.load(open(extra_cfg))
+        util.dict_merge(config, extra)
+
+    extra_mtype = {}
+    for e in args.extra_string:
+        (idenf, argstr) = e.split('=', 1)
+        path = idenf.split('.')
+        assert len(path) > 1
+        if path[0] == 'conf':
+            cfg = config
+            for p in path[1:-1]:
+                cfg = cfg.setdefault(p, {})
+            cfg[path[-1]] = argstr
+        elif path[0] == 'mtype':
+            emtype = extra_mtype
+            for p in path[1:-1]:
+                emtype = emtype.setdefault(p, {})
+            emtype[path[-1]] = argstr
+        else:
+            print('extras must start with conf. or mtype.', file=sys.stderr)
+            sys.exit(2)
+
+    for e in args.extra_literal:
+        (idenf, argstr) = e.split('=', 1)
+        path = idenf.split('.')
+        assert len(path) > 1
+        if path[0] == 'conf':
+            cfg = config
+            for p in path[1:-1]:
+                cfg = cfg.setdefault(p, {})
+            cfg[path[-1]] = ast.literal_eval(argstr)
+        elif path[0] == 'mtype':
+            emtype = extra_mtype
+            for p in path[1:-1]:
+                emtype = emtype.setdefault(p, {})
+            emtype[path[-1]] = ast.literal_eval(argstr)
+        else:
+            print('extras must start with conf. or mtype.', file=sys.stderr)
+            sys.exit(2)
+
     image_flow_table = config['image_flow']
 
     for rec, val in image_flow_table.items():
@@ -1076,6 +1145,7 @@ def main():
         machine_types = config['machine_matrix'][to_mul[0]]
         for mul in to_mul[1:]:
             util.dict_merge(machine_types, config['machine_matrix'][mul])
+        util.dict_merge(machine_types, extra_mtype)
         request = dict((a, int(b)) for (a, b)
                        in (l.split(':') for l in args.topology.split(',')))
         process_address_pool()
