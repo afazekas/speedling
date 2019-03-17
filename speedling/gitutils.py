@@ -36,7 +36,9 @@ def process_git_repo(url, branch='master', extra_remotes={}, pull_strage=None,
         dir_name = url_to_dir(url)
         dest_dir = os.sep.join((REPO_ROOT, dir_name))
         if not os.path.isdir(dest_dir):
-            subprocess.call(('git', 'clone', url), cwd=REPO_ROOT)
+            # TODO: make depth (all git arg) configureable
+            subprocess.call(('git', 'clone', '--depth', '128', url),
+                            cwd=REPO_ROOT)
         else:
             # TODO(afazekas): try stash
             subprocess.call(('git', 'pull', url), cwd=dest_dir)

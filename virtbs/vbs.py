@@ -321,22 +321,22 @@ def image_download(name, data, key=None, renew=False):
     return (data['fmt'], work_file)
 
 
-# TODO: replace arg str to array , use proper escape
 def virt_costumize_script(image, script_file, args_str='', log_file=None):
     # NOTE: cannot specify a constant destination file :(
     # --copy-in {script_file}:/root/custumie.sh did not worked
     # LIBGUESTFS_BACKEND=direct , file permissionsss
     base_name = os.path.basename(script_file)
+    cmd = '/root/' + base_name + ' ' + args_str
     (r, log) = localsh.run_log(("LIBGUESTFS_BACKEND=direct "
                                 "virt-customize --verbose --add {image} "
                                 "--memsize 1024 "
                                 "--copy-in {script_file}:/root/ "
                                 "--chmod 755:/root/{base_name} "
-                                "--run-command '/root/{base_name} {args_str}' "
+                                "--run-command {cmd} "
                                 "--selinux-relabel ").format(
-        image=image, script_file=script_file,
-        base_name=base_name,
-        args_str=args_str))
+        image=cmd_quote(image), script_file=cmd_quote(script_file),
+        base_name=cmd_quote(base_name),
+        cmd=cmd_quote(cmd)))
     print(log)
     if log_file:
         f = open(log_file, "w")
@@ -368,14 +368,19 @@ def get_image_data_dir(name):
 def image_virt_customize(name, data, image_tag=None, renew=False):
     # TODO: we do not really want to have _base_image
     # to convert to raw and move it to the _base and mage the gc more complex
-    location = base_image(data['base_slot'],
-                          data.get('image_tag', 'defualt'))
-    # TODO: same name uniquie magic
-    # TODO: build lock
-    # TODO: parallel safe build
+
     img_dir = get_image_data_dir(name)
     default_path = os.path.join(img_dir, 'default' if not image_tag
                                          else image_tag)
+    if not renew and os.path.islink(default_path):
+        real_path = os.path.realpath(default_path)
+        return ('qcow2', real_path)
+
+    location = base_image(data['base_slot'],
+                          data.get('image_tag', 'default'))
+    # TODO: same name uniquie magic
+    # TODO: build lock
+    # TODO: parallel safe build
     if not renew:
         try:
             path = os.readlink(default_path)
@@ -416,6 +421,10 @@ def image_virt_customize(name, data, image_tag=None, renew=False):
 image_flow_table = {}
 
 
+# returns back a sparse raw image either
+# from _base or from the library
+# Nobody allowed to modify these raw files,
+# deleting can be ok in same cases
 def base_image(image_type, image_tag='default'):
     # reqursively does the build steps to reach a valid image
     (fmt, image) = image_flow_table[image_type]['driver'](
@@ -627,10 +636,10 @@ def populate_reservations():
 def create_networks(conn, build_slice):
     nf = CONFIG.get('network_flags', {})
     ap = CONFIG.get('address_pool', {})
-    defualt_atype = ap.get('prefered_address', 'ipv6stateless')
+    default_atype = ap.get('prefered_address', 'ipv6stateless')
     default_stateless = ap.get('ipv6_stateless_default_enabled', False)
-    if defualt_atype == 'ipv4':
-        defualt_atype = 'ipv6stateless'
+    if default_atype == 'ipv4':
+        default_atype = 'ipv6stateless'
     for net, rese in NAME_TO_RESERVATION.items():
         net_name = 'bs' + str(build_slice) + net
         net_opts = nf.get(net, {})
@@ -767,12 +776,12 @@ def generate_node(build_slice, offset, machine_type_name):
 
     nf = CONFIG.get('network_flags', {})
     ap = CONFIG.get('address_pool', {})
-    defualt_atype = ap.get('prefered_address', 'ipv4')
+    default_atype = ap.get('prefered_address', 'ipv4')
     # allways the first network is the one we want to ssh
     if 'nets' in machine_type:
         if machine_type['nets']:
             net = machine_type['nets'][0]
-            atype = nf.get(net, {}).get('preferred_address', defualt_atype)
+            atype = nf.get(net, {}).get('preferred_address', default_atype)
             access_ip = get_addr_for(build_slice,
                                      NAME_TO_ID[net], offset, atype=atype)
 
@@ -797,7 +806,7 @@ def generate_node(build_slice, offset, machine_type_name):
     node['interfaces'] = []
     nets = machine_type.get('nets', [])
     for net in nets:
-        atype = nf.get(net, {}).get('preferred_address', defualt_atype)
+        atype = nf.get(net, {}).get('preferred_address', default_atype)
         access_ip = get_addr_for(build_slice,
                                  NAME_TO_ID[net], offset, atype=atype)
         node['interfaces'].append({

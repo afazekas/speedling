@@ -72,16 +72,19 @@ image_flow:
     f29-dev:
         driver: image_virt_customize
         base_slot: f29-my-pkg
+        script_arguments: --git-args ' --depth 16 '
         script:
             file: virtbs/bscript/os-pipgit.sh
     ubi-dev:
         driver: image_virt_customize
         base_slot: ubi-my-pkg
+        script_arguments: --git-args ' --depth 16 '
         script:
             file: virtbs/bscript/os-pipgit.sh
     suse-dev:
         driver: image_virt_customize
         base_slot: suse-my-pkg
+        script_arguments: --git-args ' --depth 16 '
         script:
             file: virtbs/bscript/os-pipgit.sh
 
