@@ -317,7 +317,7 @@ def image_download(name, data, key=None, renew=False):
                      "'{download_path}' '{work_file}'").format(
             download_path=download_path, work_file=work_file))
     tmp_link = work_file + '-lnk'
-    os.symlink(work_file, tmp_link)
+    os.symlink(os.path.basename(work_file), tmp_link)
     os.rename(tmp_link, default_path)
     return (data['fmt'], work_file)
 
@@ -358,6 +358,11 @@ def __filter_to_json(d):
             else:
                 di[k] = str(v)
     return di
+
+
+def is_slot_exists(name):
+    lib_dir = os.path.join(get_path("library"), name)
+    return os.path.isdir(lib_dir)
 
 
 def get_image_data_dir(name):
@@ -413,7 +418,7 @@ def image_virt_customize(name, data, image_tag=None, renew=False):
     di = __filter_to_json(data)
     cfgfile.put_to_file(build_image + '-data.json', json.dumps(di))
     tmp_link = build_image + '-lnk'
-    os.symlink(build_image, tmp_link)
+    os.symlink(os.path.basename(build_image), tmp_link)
     os.rename(tmp_link, default_path)
     return ('qcow2', build_image)
 
@@ -1039,6 +1044,35 @@ class MyAppend(argparse.Action):
         getattr(namespace, self.dest).append(values)
 
 
+def tag_image(slot, ref, new_refs):
+    assert is_slot_exists(slot)
+    dire = get_image_data_dir(slot)
+    src = os.path.realpath(os.path.join(dire, ref))
+    src = os.path.basename(src)
+    for dst in new_refs:
+        if os.sep in dst:
+            print("/ is not allowed in tags", file=sys.stderr)
+            sys.exit(4)
+        cfgfile.ensure_sym_link(os.path.join(dire, dst), src)
+
+
+def tagging(args):
+    slot_name = args.slot_name
+    origin = args.source
+    tags = args.tags
+    try:
+        tags.remove(origin)
+    except ValueError:
+        pass
+    if not tags:
+        print("No distingueshed tag", file=sys.stderr)
+        sys.exit(2)
+    if not is_slot_exists(slot_name):
+        print('Slot: "' + slot_name + '"does not exists', file=sys.stderr)
+        sys.exit(3)
+    tag_image(slot_name, origin, tags)
+
+
 def gen_parser():
     parser = argparse.ArgumentParser(
         description='Virt Build Slices the VM manager')
@@ -1073,6 +1107,28 @@ def gen_parser():
                               help="',' sperated list of machine matrixes from the config file")
     cycle_parser.add_argument('topology',
                               help=" machine_type:nr_instances, ..")
+
+    tag_parser = sps.add_parser('tag', help='add tag(s) to an image in a given image slot')
+    tag_parser.add_argument('slot_name',
+                            help='The slot name from the flow table')
+    tag_parser.add_argument('-s', '--source',
+                            help='Original tag or image id',
+                            default='default')
+    tag_parser.add_argument('-r', '--recursive', help="Not Implemented,"
+                            "also tag the pranet images",
+                            action='store_true')
+    tag_parser.add_argument('tags',
+                            help='list of tags to be used,'
+                            'the old tag will be overriden',
+                            nargs='+')
+    tagactive = sps.add_parser('tagactive', help='add tag(s) to an image(s) active in the slice (NotImplemented)')
+    tagactive.add_argument('-r', '--recursive', help="Not Implemented,"
+                           "also tag the pranet images")
+    tagactive.add_argument('tags',
+                           help='list of tags to be used,'
+                           'the old tag will be overriden',
+                           nargs='+')
+
     return parser
 
 
@@ -1140,6 +1196,8 @@ def main():
     build_slice = args.slice
     if args.command == 'wipe':
         wipe_slice(build_slice)
+    elif args.command == 'tag':
+        tagging(args)
     elif args.command == 'cycle':
         to_mul = args.matrix.split(',')
         machine_types = config['machine_matrix'][to_mul[0]]
