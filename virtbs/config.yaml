@@ -31,13 +31,13 @@ image_flow:
         fmt: raw
     ubuntu-18.10:
         driver: image_download
-        url_pattern: https://cloud-images.ubuntu.com/cosmic/20190301/cosmic-server-cloudimg-amd64.img
-        sha256: '687361c7913cbf27f6245857491cbbd348bbdf3f0ca96cd84d20efd5413c7021'
+        url_pattern: https://cloud-images.ubuntu.com/cosmic/20190314/cosmic-server-cloudimg-amd64.img
+        sha256: '469e8906ef40db7176504e1015b503fe024b8a142ee9e3a1609f6c7075c76d5f'
         fmt: qcow2
     opensuse-15.0:
         driver: image_download
-        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-0.0.4-Buildlp150.12.124.qcow2
-        sha256: 'dadcb47d14121b4240827ce9d92fc3d99b1142887dc37adb294493cef698973a'
+        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-0.0.4-Buildlp150.12.130.qcow2
+        sha256: 'bed122e0abf4c7234892f069728defe1a843f969f575af8761301cde2099adb8'
         fmt: qcow2
     f29-my:
         driver: image_virt_customize

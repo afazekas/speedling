@@ -261,7 +261,7 @@ def image_download(name, data, key=None, renew=False):
 
     if not renew:
         try:
-            path = os.readlink(default_path)
+            path = os.path.realpath(default_path)
             return (data['fmt'], path)
         except OSError as exc:
             if exc.errno != errno.ENOENT:
@@ -387,13 +387,6 @@ def image_virt_customize(name, data, image_tag=None, renew=False):
     # TODO: same name uniquie magic
     # TODO: build lock
     # TODO: parallel safe build
-    if not renew:
-        try:
-            path = os.readlink(default_path)
-            return ('qcow2', path)
-        except OSError as exc:
-            if exc.errno != errno.ENOENT:
-                raise
 
     build_id = str(uuid.uuid4())
     build_image = os.path.join(img_dir, build_id)  # no suffix
