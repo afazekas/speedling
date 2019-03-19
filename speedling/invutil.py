@@ -33,7 +33,7 @@ def parse_ansible_invetory_ini(source):
         foo = shlex.split(li)  # without comments
         ll = len(foo)
         if not ll:
-            if not le.isspace():
+            if not li.isspace():
                 raise Exception('Invalid Syntax3 :' + li)
         host = foo[0]
         host_in_group[in_group].append(host)
@@ -61,7 +61,7 @@ def parse_ansible_invetory_ini(source):
     not_intersting_ch = {'\r', '\n', '#'}
     with contextlib.closing(open(source)) as f:
         while True:
-            le = f.readline(131072)
+            li = f.readline(131072)
             if li == '':
                 break
             fc = li[0]
