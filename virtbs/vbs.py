@@ -260,12 +260,9 @@ def image_download(name, data, key=None, renew=False):
     default_path = os.path.join(img_dir, 'default')
 
     if not renew:
-        try:
-            path = os.path.realpath(default_path)
+        path = os.path.realpath(default_path)
+        if os.path.exists(path):
             return (data['fmt'], path)
-        except OSError as exc:
-            if exc.errno != errno.ENOENT:
-                raise
 
     D = data.copy()
     D['key'] = key

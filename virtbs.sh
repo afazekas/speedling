@@ -7,5 +7,5 @@ PYTHON=python
 if `which python3 &>/dev/null`; then
 PYTHON=python3
 fi
-
+cd $SCRIPTPATH
 PYTHONPATH=$SCRIPTPATH  $PYTHON ./virtbs/vbs.py $*
