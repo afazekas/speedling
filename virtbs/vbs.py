@@ -2,11 +2,8 @@ from __future__ import print_function
 
 import argparse
 import ast
-import errno
 import functools
 import ipaddress
-# is ujson still the fastest ?
-# anyjson did not had dump
 import json
 import os
 import os.path
@@ -42,10 +39,8 @@ except ImportError:
 
 
 # TODO: init selinux perm
-# TODO: create Makefile instead of setup.py
-# NOTE: libvirt is not on pypi
 
-# TODO kill ssh DNS , kill requiretty (both my image and cloud init)
+# TODO kill ssh DNS reverse, kill requiretty (both my image and cloud init)
 
 SSH_PUBLIC_KEY_LIST_PATH_REL = '/id_rsa.pub'  # ro file, can have multiple keys
 
@@ -89,7 +84,10 @@ def create_backed_qcow2(src, dst, size='10G', bfmt='raw'):
     # the args are not shell escaped
     if size:
         s = util.human_byte_to_int(size)
-        image_size = get_virtual_size(src)
+        if bfmt == 'raw':
+            image_size = os.path.getsize(src)
+        else:
+            image_size = get_virtual_size(src)
         if image_size > s:
             size = image_size
         localsh.run("qemu-img create -f qcow2 -o 'backing_fmt={bfmt},"
@@ -123,10 +121,10 @@ def bootvm(conn, node):
     keys_path = get_path("keys")
     for disk in node['disks']:
         if 'image_slot' in disk and disk['image_slot']:
+            (fmt, location) = base_image(disk['image_slot'],
+                                         disk.get('image_tag', 'default'))
             create_backed_qcow2(
-                base_image(disk['image_slot'],
-                           disk.get('image_tag', 'default')),
-                disk['path'],  disk['size'])
+                location, disk['path'],  size=disk['size'], bfmt=fmt)
         else:
             create_empty_disk(disk['path'], disk['size'])
 
@@ -251,27 +249,43 @@ def _file_sha256_sum(for_sum):
                        for_sum)).split(" ")[0]
 
 
+def is_allowed_tag_path(path):
+    # use stat ?
+    if not os.path.exists(path):
+        return True
+    return os.path.islink(path)
+
+
+def check_tag_path(path):
+    if not is_allowed_tag_path(path):
+        print("Tag {} would override a non symbolic link".format(path),
+              file=sys.stderr)
+        exit(3)
+
 # not genrally usable, yet!
 # not fault and insane tolerant!
 # not parallel safe!
-def image_download(name, data, key=None, renew=False):
+
+
+def image_download(name, data, image_tag='default', renew=False):
     build_id = str(uuid.uuid4())
     img_dir = get_image_data_dir(name)
-    default_path = os.path.join(img_dir, 'default')
+    tag_path = os.path.join(img_dir, image_tag)
+    check_tag_path(tag_path)
+    tag_exists = os.path.exists(tag_path)
 
-    if not renew:
-        path = os.path.realpath(default_path)
+    if not renew and tag_exists:
+        path = os.path.realpath(tag_path)
         if os.path.exists(path):
             return (data['fmt'], path)
 
     D = data.copy()
-    D['key'] = key
     url = data['url_pattern'].format(**D)
     fetch_path = get_path("downloads")
     download_path = os.path.join(fetch_path, os.path.basename(url))
     # WARNING: assumes unique names
     verified = False
-    if os.path.exists(download_path) and 'sha256' in data:
+    if os.path.exists(download_path) and 'sha256' in data and data['sha256']:
         suma = _file_sha256_sum(download_path)
         if suma == data['sha256']:
             print('Alrady have the file at {}'.format(download_path))
@@ -297,10 +311,10 @@ def image_download(name, data, key=None, renew=False):
                 download_path=download_path, work_file=work_file))
         else:
             if 'file_in_tar_pattern' not in D:
-                raise NotImplementedError('We are not gussing the filename in '
-                                          'tar, use file_in_tar_pattern')
+                raise NotImplementedError('We are not guessing the filename in '
+                                          'the tar, use file_in_tar_pattern')
             in_file = data['file_in_tar_pattern'].format(**D)
-            # assume tar autodectes the compression
+            # assume the tar autodectes the compression
             # no way specifiy the decompressed file final name !
             # not tested code path
             localsh.run(("cd '{fetch_path}'; tar -xf "
@@ -315,18 +329,23 @@ def image_download(name, data, key=None, renew=False):
             download_path=download_path, work_file=work_file))
     tmp_link = work_file + '-lnk'
     os.symlink(os.path.basename(work_file), tmp_link)
-    os.rename(tmp_link, default_path)
+    os.rename(tmp_link, tag_path)
     return (data['fmt'], work_file)
 
 
-def virt_costumize_script(image, script_file, args_str='', log_file=None):
+def virt_costumize_script(image, script_file, args_str='', log_file=None,
+                          verbose=False):
     # NOTE: cannot specify a constant destination file :(
     # --copy-in {script_file}:/root/custumie.sh did not worked
     # LIBGUESTFS_BACKEND=direct , file permissionsss
     base_name = os.path.basename(script_file)
     cmd = '/root/' + base_name + ' ' + args_str
+    if verbose:
+        verb = '--verbose'
+    else:
+        verb = ''
     (r, log) = localsh.run_log(("LIBGUESTFS_BACKEND=direct "
-                                "virt-customize --verbose --add {image} "
+                                "virt-customize {verbose} --add {image} "
                                 "--memsize 1024 "
                                 "--copy-in {script_file}:/root/ "
                                 "--chmod 755:/root/{base_name} "
@@ -334,7 +353,7 @@ def virt_costumize_script(image, script_file, args_str='', log_file=None):
                                 "--selinux-relabel ").format(
         image=cmd_quote(image), script_file=cmd_quote(script_file),
         base_name=cmd_quote(base_name),
-        cmd=cmd_quote(cmd)))
+        cmd=cmd_quote(cmd), verbose=verb))
     print(log)
     if log_file:
         f = open(log_file, "w")
@@ -368,27 +387,27 @@ def get_image_data_dir(name):
     return lib_dir
 
 
-def image_virt_customize(name, data, image_tag=None, renew=False):
-    # TODO: we do not really want to have _base_image
-    # to convert to raw and move it to the _base and mage the gc more complex
-
+def image_virt_customize(name, data, image_tag='default', renew=False,
+                         min_target_size='10G'):
+    # min_target_size is hint the target size will can be bigger
     img_dir = get_image_data_dir(name)
-    default_path = os.path.join(img_dir, 'default' if not image_tag
-                                         else image_tag)
-    if not renew and os.path.islink(default_path):
-        real_path = os.path.realpath(default_path)
+    tag_path = os.path.join(img_dir, image_tag)
+    check_tag_path(tag_path)  # merge stat call
+    tag_exists = os.path.exists(tag_path)
+
+    if not renew and tag_exists:
+        real_path = os.path.realpath(tag_path)
         return ('qcow2', real_path)
 
-    location = base_image(data['base_slot'],
-                          data.get('image_tag', 'default'))
-    # TODO: same name uniquie magic
-    # TODO: build lock
+    (fmt, location) = base_image(data['base_slot'],
+                                 data.get('image_tag', 'default'))
     # TODO: parallel safe build
 
     build_id = str(uuid.uuid4())
     build_image = os.path.join(img_dir, build_id)  # no suffix
     build_log = os.path.join(img_dir, build_id + '.log')
-    create_backed_qcow2(location, build_image)  # TODO: add size parameter
+    create_backed_qcow2(location, build_image,
+                        size=min_target_size, bfmt=fmt)
     script = None
     script_desc = data.get('script', None)
     if 'here' in script_desc:
@@ -409,33 +428,19 @@ def image_virt_customize(name, data, image_tag=None, renew=False):
     cfgfile.put_to_file(build_image + '-data.json', json.dumps(di))
     tmp_link = build_image + '-lnk'
     os.symlink(os.path.basename(build_image), tmp_link)
-    os.rename(tmp_link, default_path)
+    os.rename(tmp_link, tag_path)
     return ('qcow2', build_image)
 
 
 # NOTE: we might need to handle more version key kind values
-image_flow_table = {}
+IMAGE_FLOW_TABLE = {}
 
 
-# returns back a sparse raw image either
-# from _base or from the library
-# Nobody allowed to modify these raw files,
-# deleting can be ok in same cases
 def base_image(image_type, image_tag='default'):
-    # reqursively does the build steps to reach a valid image
-    (fmt, image) = image_flow_table[image_type]['driver'](
+    (fmt, image) = IMAGE_FLOW_TABLE[image_type]['driver'](
         image_type,
-        image_flow_table[image_type], image_tag)
-    if fmt == 'qcow2':
-        # WARNING: assumes globaly uniquie name
-        base_file = os.path.basename(image)
-        bpath = get_path("_base")
-        base_path = os.path.join(bpath, base_file)
-        if not os.path.isfile(base_path):
-            qcow2_to_raw(image, base_path)
-        return base_path
-    assert fmt == 'raw'
-    return image
+        IMAGE_FLOW_TABLE[image_type], image_tag)
+    return (fmt, image)
 
 
 def wipe_domain_by_uuid(UUID):
@@ -795,8 +800,7 @@ def generate_node(build_slice, offset, machine_type_name):
             'hostgroup': machine_type_name,
             'offset': offset,
             'build_slice': build_slice,
-            'access_ip': access_ip,
-            }
+            'access_ip': access_ip, }
     if access_ip:
         node['access_ip_version'] = 4 if atype == 'ipv4' else 6
     node['interfaces'] = []
@@ -977,7 +981,7 @@ def queury_non_root():
 def create_workspace():
     # consider adding other groups
     root = get_path() + os.path.sep
-    dirs = ['downloads', 'library', '_base',
+    dirs = ['downloads', 'library',
             'live', 'cd', 'log', 'keys']
     for d in dirs:
         os.makedirs(root + d, exist_ok=True)
@@ -1043,7 +1047,9 @@ def tag_image(slot, ref, new_refs):
         if os.sep in dst:
             print("/ is not allowed in tags", file=sys.stderr)
             sys.exit(4)
-        cfgfile.ensure_sym_link(os.path.join(dire, dst), src)
+        tgt = os.path.join(dire, dst)
+        check_tag_path(tgt)
+        cfgfile.ensure_sym_link(tgt, src)
 
 
 def tagging(args):
@@ -1127,7 +1133,7 @@ CONFIG = {}
 
 def main():
     global CONFIG
-    global image_flow_table
+    global IMAGE_FLOW_TABLE
     global machine_types
     parser = gen_parser()
     args = parser.parse_args(sys.argv[1:])
@@ -1173,9 +1179,9 @@ def main():
             print('extras must start with conf. or mtype.', file=sys.stderr)
             sys.exit(2)
 
-    image_flow_table = config['image_flow']
+    IMAGE_FLOW_TABLE = config['image_flow']
 
-    for rec, val in image_flow_table.items():
+    for rec, val in IMAGE_FLOW_TABLE.items():
         driver = getattr(__main__, val['driver'])
         if not hasattr(driver, 'flow_exportd'):
             raise Exception('The driver ({}) not labled with '

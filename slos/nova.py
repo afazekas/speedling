@@ -45,10 +45,10 @@ class Libvirt(facility.VirtDriver):
 
 
 def task_nova_steps(self):
-    self.wait_for_components(self.messaging, self.keystone)
     novas = self.hosts_with_service('nova-api')
     schema_node_candidate = self.hosts_with_service('nova-api')
     schema_node = util.rand_pick(schema_node_candidate)
+    self.wait_for_components(self.sql)
 
     sync_cmd = 'su -s /bin/sh -c "nova-manage api_db sync" nova'
     self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
