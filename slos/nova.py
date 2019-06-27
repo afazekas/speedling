@@ -46,7 +46,7 @@ class Libvirt(facility.VirtDriver):
 
 def task_nova_steps(self):
     novas = self.hosts_with_service('nova-api')
-    schema_node_candidate = self.hosts_with_service('nova-api')
+    schema_node_candidate = novas
     schema_node = util.rand_pick(schema_node_candidate)
     self.wait_for_components(self.sql)
 
@@ -75,6 +75,18 @@ def task_nova_steps(self):
 
     self.wait_for_components(self.keystone, self.virtdriver)
     self.call_do(novas, self.do_cell_reg)
+
+
+def task_placement_steps(self):
+    placements = self.hosts_with_service('placement-api')
+    schema_node_candidate = placements
+    schema_node = util.rand_pick(schema_node_candidate)
+    self.wait_for_components(self.sql)
+
+    sync_cmd = 'su -s /bin/sh -c "placement-manage db sync" placement'
+    self.call_do(schema_node, facility.do_retrycmd_after_content, c_args=(sync_cmd, ))
+
+    self.call_do(placements, self.do_local_placement_service_start)
 
 
 def task_have_content(self):
@@ -116,6 +128,98 @@ class NoVNC(WebContent):
         # TODO: fetch asset asset/compname/novnc.tar.gz
 
 
+class Placement(facility.OpenStack):
+    origin_repo = 'https://github.com/openstack/placement.git'
+    deploy_source = 'src'
+    deploy_source_options = {'src'}
+    deploy_mode = 'standalone'
+    services = {'placement-api': {'deploy_mode': 'standalone',
+                                  'unit_name': {'src': sp + 'placement-api',
+                                                'pkg': 'openstack-placement-api'}}, }
+
+    def compose(self):
+        # it can consider the full inventory and config to influnce facility registered
+        # resources
+        super(Placement, self).compose()
+        pv = conf.get_vip('public')['domain_name']
+        dr = conf.get_default_region()
+        url_base = "http://" + pv
+
+        self.keystone.register_endpoint_tri(region=dr,
+                                            name='placement',
+                                            etype='placement',
+                                            description='OpenStack Nova Placement Service',
+                                            url_base=url_base + ':8780')
+        self.keystone.register_service_admin_user('placement')
+        placements = self.hosts_with_service('placement-api')
+        self.sql.register_user_with_schemas('placement', ['placement'])
+        util.bless_with_principal(placements,
+                                  [(self.keystone, 'placement@default'),
+                                   (self.sql, 'placement')])
+
+    def __init__(self, *args, **kwargs):
+        super(Placement, self).__init__(*args, **kwargs)
+        self.final_task = self.bound_to_instance(task_placement_steps)
+        self.peer_info = {}
+        self.sql = self.dependencies["sql"]
+        self.keystone = self.dependencies["keystone"]
+
+    def do_local_placement_service_start(cname):
+        self = facility.get_component(cname)
+        tasks.local_os_service_start_by_component(self)
+
+    def etc_placement_placement_conf(self):
+        # NOTE! mariadb.db_url not required on compute when the use_conductur is False
+        return {'DEFAULT': {'debug': True,
+                            },
+                'keystone_authtoken': self.keystone.authtoken_section('placement'),
+                'placement_database': {'connection': self.sql.db_url('placement')},
+                }
+    # not in use, we are still using the standalone mode
+
+    def etc_httpd_conf_d_wsgi_placement_conf(self):
+        srv_name = 'httpd' if util.get_distro()['family'] == 'redhat' else 'apache2'
+        log_dir = '/var/log/' + srv_name
+        return """
+<VirtualHost *:8780>
+    WSGIDaemonProcess placement-api processes=5 threads=1 user=placement display-name=%{GROUP} %VIRTUALENV%
+    WSGIProcessGroup placement-api
+    WSGIScriptAlias / {bin_dir}/placement-api
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIPassAuthorization On
+    <IfVersion >= 2.4>
+      ErrorLogFormat "%M"
+    </IfVersion>
+    ErrorLog /var/log/%APACHE_NAME%/placement-api.log
+    %SSLENGINE%
+    %SSLCERTFILE%
+    %SSLKEYFILE%
+</VirtualHost>
+
+Alias /placement %PUBLICWSGI%
+<Location /placement>
+    SetHandler wsgi-script
+    Options +ExecCGI
+    WSGIProcessGroup placement-api
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIPassAuthorization On
+</Location>
+""".format(bin_dir='/usr/local/bin', log_dir=log_dir)
+
+    def etccfg_content(self):
+        super(Placement, self).etccfg_content()
+        placement_git_dir = gitutils.component_git_dir(self)
+        usrgrp.group('placement')
+        usrgrp.user('placement', 'placement')
+        util.base_service_dirs('placement')
+        self.file_ini('/etc/placement/placement.conf', self.etc_placement_placement_conf(),
+                      owner='placement', group='placement')
+        # test_only not recommended as stand alone
+        util.unit_file(self.services['placement-api']['unit_name'][self.deploy_source],
+                       '/usr/local/bin/placement-api  --port 8780',
+                       'placement')
+
+
 class Nova(facility.OpenStack):
     origin_repo = 'https://github.com/openstack/nova.git'
     deploy_source = 'src'
@@ -129,9 +233,6 @@ class Nova(facility.OpenStack):
                 'nova-compute': {'deploy_mode': 'standalone',
                                  'unit_name': {'src': sp + 'n-cpu',
                                                'pkg': 'openstack-nova-compute'}},
-                'nova-placement-api': {'deploy_mode': 'standalone',
-                                       'unit_name': {'src': sp + 'n-place',
-                                                     'pkg': 'openstack-nova-placement-api'}},
                 'nova-consoleauth': {'deploy_mode': 'standalone',  # Deprecated
                                      'unit_name': {'src': sp + 'n-cauth',
                                                    'pkg': 'openstack-nova-consoleauth'}},
@@ -233,10 +334,6 @@ class Nova(facility.OpenStack):
 
         self.file_ini('/etc/nova/nova.conf', self.etc_nova_nova_conf(),
                       owner='nova', group='nova')
-        # test_only not recommended as stand alone
-        util.unit_file(self.services['nova-placement-api']['unit_name'][self.deploy_source],
-                       '/usr/local/bin/nova-placement-api  --port 8780',
-                       'nova')
         if self.deploy_source == 'src':
             self.file_install('/etc/nova/api-paste.ini',
                               '/'.join((nova_git_dir,
@@ -249,9 +346,6 @@ class Nova(facility.OpenStack):
                               mode=0o444)
             util.unit_file(self.services['nova-api']['unit_name']['src'],
                            '/usr/local/bin/nova-api',
-                           'nova')
-            util.unit_file(self.services['nova-placement-api']['unit_name']['src'],
-                           '/usr/local/bin/nova-placement-api  --port 8780',
                            'nova')
             util.unit_file(self.services['nova-conductor']['unit_name']['src'],
                            '/usr/local/bin/nova-conductor',

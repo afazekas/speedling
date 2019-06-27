@@ -81,6 +81,9 @@ def createmodel():
 
     mynovnc = slos.nova.NoVNC()
 
+    myplacement = slos.nova.Placement(dependencies={'sql': mymariadb,
+                                                    'keystone': mykeystone})
+
     mynova = slos.nova.Nova(dependencies={'loadbalancer': myhaproxy,
                                           'sql': mymariadb,
                                           'memcached': mymemcached,
@@ -90,6 +93,7 @@ def createmodel():
                                           'virtdriver': myvirt_driver,
                                           'cells': {'cell0': {'messaging': myrabbitmq}, 'sql': mymariadb},
                                           'networking': myneutron,
+                                          'placement': myplacement,
                                           'backends': [{'sname': 'slceph:rbd', 'component': myceph}]})
 
     # added the things tempest creates resource at setup time
@@ -201,7 +205,7 @@ def create_inventory_and_glb():
                               'nova-consoleauth', 'nova-scheduler', 'nova-conductor',
                               'nova-novncproxy', 'cinder-backup', 'cinder-api',
                               'cinder-scheduler', 'cinder-volume', 'ceph-osd',
-                              'ceph-mgr', 'ceph-mon',  'nova-placement-api', 'swift-object',
+                              'ceph-mgr', 'ceph-mon',  'placement-api', 'swift-object',
                               'swift-container', 'swift-account', 'swift-proxy',
                               'neutron-metering-agent', 'swift-container-sync',
                               'neutron-openvswitch-agent', 'openvswitch', 'neutron-metering-agent'}

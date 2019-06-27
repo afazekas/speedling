@@ -131,6 +131,7 @@ function wait_all {
 
 if [ $DOGIT = TRUE ]; then
    git_clone_or_pull "https://github.com/openstack/nova.git"
+   git_clone_or_pull "https://github.com/openstack/placement.git"
    git_clone_or_pull "https://github.com/openstack/neutron.git"
    git_clone_or_pull "https://github.com/openstack/glance.git"
    git_clone_or_pull "https://github.com/openstack/cinder.git"
@@ -146,6 +147,7 @@ fi
 if [ $DOPIP = TRUE ]; then
     cd "$BASE_DIR"
     pip3 install -c requirements/upper-constraints.txt -r nova/requirements.txt
+    pip3 install -c requirements/upper-constraints.txt -r placement/requirements.txt
     pip3 install -c requirements/upper-constraints.txt -r neutron/requirements.txt
     pip3 install -c requirements/upper-constraints.txt -r glance/requirements.txt
     pip3 install -c requirements/upper-constraints.txt -r cinder/requirements.txt
