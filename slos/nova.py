@@ -208,7 +208,6 @@ Alias /placement %PUBLICWSGI%
 
     def etccfg_content(self):
         super(Placement, self).etccfg_content()
-        placement_git_dir = gitutils.component_git_dir(self)
         usrgrp.group('placement')
         usrgrp.user('placement', 'placement')
         util.base_service_dirs('placement')

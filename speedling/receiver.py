@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+
 import grp
 import logging
 import numbers
 import os
 import pickle
-# TODO: move the dependent function elsewhere
-import pwd
+import pwd  # TODO: move the dependent function elsewhere
 import queue
 import select
 import threading

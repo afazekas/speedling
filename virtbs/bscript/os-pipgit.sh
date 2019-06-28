@@ -152,7 +152,7 @@ if [ $DOPIP = TRUE ]; then
     pip3 install -c requirements/upper-constraints.txt -r glance/requirements.txt
     pip3 install -c requirements/upper-constraints.txt -r cinder/requirements.txt
     pip3 install -c requirements/upper-constraints.txt -r keystone/requirements.txt
-    pip install -c requirements/upper-constraints.txt -r swift/requirements.txt
+    pip3 install -c requirements/upper-constraints.txt -r swift/requirements.txt
     pip3 install -c requirements/upper-constraints.txt -r tempest/requirements.txt
     pip3 install -c requirements/upper-constraints.txt python-openstackclient
     (cd nova; pip3 install -e .)
@@ -160,6 +160,6 @@ if [ $DOPIP = TRUE ]; then
     (cd glance; pip3 install -e .)
     (cd cinder; pip3 install -e .)
     (cd keystone; pip3 install -e .)
-    (cd swift; pip install -e .)
+    (cd swift; pip3 install -e .)
     (cd tempest; pip3 install -e .)
 fi

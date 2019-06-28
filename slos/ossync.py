@@ -5,7 +5,6 @@ import time
 
 # keystone client depends on this library so it is not an extra
 import requests.structures
-
 from keystoneauth1 import session as keystone_session
 from keystoneclient.v3 import client as keystone_client
 

@@ -274,6 +274,10 @@ Listen 35357
                                   [(self.name, 'admin@default'), (sql.name, 'keystone')])
 
     def authtoken_section(self, service_user):
+        # openstack ini file handles % specially
+        # now we are escaping just the password and just here (lower layer does not do escape ATM)
+        pwd = util.get_keymgr()(self.name, service_user + '@default')
+        pwd = pwd.replace('%', '%%')
         d = {"auth_url": 'http://' + conf.get_vip('public')['domain_name'] + ':5000/',
              "project_domain_name": 'Default',
              "project_name": 'service',

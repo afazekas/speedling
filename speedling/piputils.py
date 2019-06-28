@@ -10,7 +10,6 @@ from speedling import pkgutils
 LOG = logging.getLogger(__name__)
 
 PIP_LOCK = threading.Lock()
-PIP2_LOCK = threading.Lock()
 
 
 # NOTE: This ensure lock thingy is repeated, maybe something smart would be nice
@@ -44,13 +43,6 @@ def setup_develop(comp):
     pip_install(['-e ' + directory])
 
 
-def setup_develop2(comp):
-    LOG.info('setup_develop: ' + comp.name)
-    directory = gitutils.url_to_dir(comp.origin_repo)
-    pip2_install_req(['-r ' + directory + '/requirements.txt'])
-    pip2_install(['-e ' + directory])
-
-
 def req_dir():
     return gitutils.url_to_dir(REQUIREMENTS_URL)
 
@@ -78,29 +70,6 @@ def pip_install(targets):
                     targets=' '.join(targets)))
     finally:
         PIP_LOCK.release()
-
-
-def pip2_install_req(targets):
-    ensure_requirements()
-    pkgutils.ensure_compose()
-    r_dir = req_dir()
-    try:
-        PIP2_LOCK.acquire()
-        localsh.run('pip2 install --ignore-installed -c {req_dir}/upper-constraints.txt {targets}'.format(
-                    req_dir=r_dir, targets=' '.join(targets)))
-    finally:
-        PIP2_LOCK.release()
-
-
-def pip2_install(targets):
-    ensure_requirements()
-    pkgutils.ensure_compose()
-    try:
-        PIP2_LOCK.acquire()
-        localsh.run('pip2 install {targets}'.format(
-                    targets=' '.join(targets)))
-    finally:
-        PIP2_LOCK.release()
 
 
 # NOT removed beeing a comopenent, but I change my mind it will be again

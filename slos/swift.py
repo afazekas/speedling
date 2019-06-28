@@ -27,7 +27,6 @@ class Swift(facility.OpenStack, facility.StorageBackend):
     origin_repo = 'https://github.com/openstack/swift.git'
     deploy_source = 'src'
     deploy_source_options = {'src', 'pkg'}
-    python_version = 2
     services = {'swift-proxy': {'deploy_mode': 'standalone',
                                 'unit_name': {'src': sp + 's-proxy',
                                               'pkg': 'openstack-swift-server'}},
@@ -123,7 +122,8 @@ class Swift(facility.OpenStack, facility.StorageBackend):
                          'bind_ip': object_ip,
                          'bind_port': 6200},
              'pipeline:main': {'pipeline': 'object-server'},
-             'app:object-server': {'use': 'egg:swift#object'}}
+             'app:object-server': {'use': 'egg:swift#object',
+                                   'replication_concurrency': 0}}  # https://bugs.launchpad.net/swift/+bug/1691075
         return r
 
     def etc_swift_account_server_conf(self):
@@ -159,19 +159,19 @@ class Swift(facility.OpenStack, facility.StorageBackend):
         comp = facility.get_component('swift')
         if comp.deploy_source == 'src':
             util.unit_file(self.services['swift-account']['unit_name']['src'],
-                           '/usr/bin/swift-account-server /etc/swift/account-server.conf',
+                           '/usr/local/bin/swift-account-server /etc/swift/account-server.conf',
                            'swift')
             util.unit_file(self.services['swift-object']['unit_name']['src'],
-                           '/usr/bin/swift-object-server /etc/swift/object-server.conf',
+                           '/usr/local/bin/swift-object-server /etc/swift/object-server.conf',
                            'swift')
             util.unit_file(self.services['swift-container']['unit_name']['src'],
-                           '/usr/bin/swift-container-server /etc/swift/container-server.conf',
+                           '/usr/local/bin/swift-container-server /etc/swift/container-server.conf',
                            'swift')
             util.unit_file(self.services['swift-container-sync']['unit_name']['src'],
-                           '/usr/bin/swift-container-sync /etc/swift/container-server.conf',
+                           '/usr/local/bin/swift-container-sync /etc/swift/container-server.conf',
                            'swift')
             util.unit_file(self.services['swift-proxy']['unit_name']['src'],
-                           '/usr/bin/swift-proxy-server /etc/swift/proxy-server.conf',
+                           '/usr/local/bin/swift-proxy-server /etc/swift/proxy-server.conf',
                            'swift')
 
         services = self.filter_node_enabled_services(self.services.keys())
@@ -262,7 +262,7 @@ done
     def get_node_packages(self):
         pkgs = super(Swift, self).get_node_packages()
         pkgs.update({'curl', 'lib-dev\\erasurecode', 'memcached', 'lib-py3\\pyxattr',
-                     'srv-rsync\\rsyncd', 'sqlite', 'xfsprogs', 'lib-py2\\keystonemiddleware'})
+                     'srv-rsync\\rsyncd', 'sqlite', 'xfsprogs'})
         if self.deploy_source == 'pkg':
             pkgs.update({'openstack-swift'})
         return pkgs

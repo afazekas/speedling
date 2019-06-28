@@ -360,17 +360,13 @@ def do_retrycmd_after_content(cname, cmd):
 
 class OpenStack(Component):
     # TODO: place hare some config possibility like worker number strategy
-    python_version = 3
     regions = ['RegionOne']  # move vips to region, keystone may register himself to multiple, but others should use single (per instance)
 
     def get_node_packages(self):
         pkgs = super(OpenStack, self).get_node_packages()
         if self.deploy_source == 'src':
-            pypkg = 'lib-dev\\python' + str(self.python_version)
-            pippkg = 'python3-pip'
-            if self.python_version == 2:
-                pippkg = 'cli-py2\\pip'
-            pkgs.update({pippkg, 'git', pypkg, 'util-lang\\gcc-g++',
+            pkgs.update({'python3-pip', 'git', 'lib-dev\\python3',
+                         'util-lang\\gcc-g++',
                          'lib-dev\\ffi', 'lib-dev\\xslt', 'lib-dev\\openssl',
                          'lib-py3\\pymysql'})
         return pkgs
@@ -380,10 +376,7 @@ class OpenStack(Component):
         gconf = conf.get_global_config()
         need_pip = gconf.get('use_pip', True)
         if need_pip:
-            if self.python_version != 2:
-                piputils.setup_develop(self)
-            else:
-                piputils.setup_develop2(self)
+            piputils.setup_develop(self)
 
 
 class InterfaceDriver(Component):

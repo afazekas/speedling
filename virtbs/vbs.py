@@ -13,10 +13,10 @@ import uuid
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 
-import libvirt
 import yaml
 
 import __main__
+import libvirt
 # WARNING: improper shell escapes, evil guy can be evil!
 from speedling import cfgfile
 from speedling import fetch
