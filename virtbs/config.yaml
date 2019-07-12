@@ -23,42 +23,42 @@ address_pool:
         ipv4_address_serving_default_enabled: False
 
 image_flow:
-    f29:
+    f30:
         driver: image_download
-        url_pattern: https://download.fedoraproject.org/pub/fedora/linux/releases/29//Cloud/x86_64/images/Fedora-Cloud-Base-29-1.2.x86_64.raw.xz
-        sha256: 'd44dccfaa302dc25a0ca42ad442d4b1651aca486d8940238649062b72e8bf466'
+        url_pattern: http://download.eng.brq.redhat.com/pub/fedora/linux/releases/30/Cloud/x86_64/images/Fedora-Cloud-Base-30-1.2.x86_64.raw.xz
+        sha256: 'e34fb3fbbb9e3b4757952cf813da80f2dea4b0d1ca311e2017b62f0c74e376d9'
         compression: xz
         fmt: raw
-    ubuntu-18.10:
+    ubuntu-19.04:
         driver: image_download
-        url_pattern: https://cloud-images.ubuntu.com/cosmic/20190314/cosmic-server-cloudimg-amd64.img
-        sha256: '469e8906ef40db7176504e1015b503fe024b8a142ee9e3a1609f6c7075c76d5f'
+        url_pattern: https://cloud-images.ubuntu.com/disco/20190709.1/disco-server-cloudimg-amd64.img
+        sha256: '053b8a12f7efa39527a52deb5071dda2bab2c62844b076bf1dba9f2b70f6943b'
         fmt: qcow2
-    opensuse-15.0:
+    opensuse-15.1:
         driver: image_download
-        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.0/images/openSUSE-Leap-15.0-OpenStack.x86_64-0.0.4-Buildlp150.12.130.qcow2
-        sha256: 'bed122e0abf4c7234892f069728defe1a843f969f575af8761301cde2099adb8'
+        url_pattern: https://download.opensuse.org/repositories/Cloud:/Images:/Leap_15.1/images/openSUSE-Leap-15.1-OpenStack.x86_64-0.0.4-Build6.2.qcow2
+        sha256: 'c1ad9ba548ee509df414eb2a1f115a83bc1175309580360dedb777d4a76176c6'
         fmt: qcow2
-    f29-my:
+    f30-my:
         driver: image_virt_customize
-        base_slot: f29
+        base_slot: f30
         script:
            file: virtbs/bscript/my.sh
     ubi-my:
         driver: image_virt_customize
-        base_slot: ubuntu-18.10
+        base_slot: ubuntu-19.04
         script:
            file: virtbs/bscript/my.sh
     suse-my:
         driver: image_virt_customize
-        base_slot: opensuse-15.0
+        base_slot: opensuse-15.1
         script:
            file: virtbs/bscript/my.sh
-    f29-my-pkg:
+    f30-my-pkg:
         driver: image_virt_customize
-        base_slot: f29-my
+        base_slot: f30-my
         script:
-           file: virtbs/bscript/f29_os_basepkg.sh
+           file: virtbs/bscript/fedora_os_basepkg.sh
     ubi-my-pkg:
         driver: image_virt_customize
         base_slot: ubi-my
@@ -69,9 +69,9 @@ image_flow:
         base_slot: suse-my
         script:
            file: virtbs/bscript/opensuse_os_basepkg.sh
-    f29-dev:
+    f30-dev:
         driver: image_virt_customize
-        base_slot: f29-my-pkg
+        base_slot: f30-my-pkg
         script_arguments: --git-args ' --depth 16 '
         script:
             file: virtbs/bscript/os-pipgit.sh
@@ -165,27 +165,27 @@ machine_matrix:
         controller:
             disks:
                 disk0:
-                    image_slot: f29-dev
+                    image_slot: f30-dev
         worker:
             disks:
                 disk0:
-                    image_slot: f29-dev
+                    image_slot: f30-dev
         plain:
             disks:
                 disk0:
-                    image_slot: f29
+                    image_slot: f30
         minim:
             disks:
                 disk0:
-                    image_slot: f29-my
+                    image_slot: f30-my
         osbase:
             disks:
                 disk0:
-                    image_slot: f29-my-pkg
+                    image_slot: f30-my-pkg
         disk:
             disks:
                 disk0:
-                    image_slot: f29-dev
+                    image_slot: f30-dev
 
     ubuntu:
         controller:
@@ -199,7 +199,7 @@ machine_matrix:
         plain:
             disks:
                 disk0:
-                    image_slot: ubuntu-18.10
+                    image_slot: ubuntu-19.04
         minim:
             disks:
                 disk0:
@@ -225,7 +225,7 @@ machine_matrix:
         plain:
             disks:
                 disk0:
-                    image_slot: opensuse-15.0
+                    image_slot: opensuse-15.1
         minim:
             disks:
                 disk0:

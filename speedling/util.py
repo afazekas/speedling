@@ -197,7 +197,7 @@ def get_distro():
     if 'dnf' == pkg_mgr:
         DISTRO['family'] = 'redhat'
         DISTRO['variant'] = 'fedora'
-        DISTRO['version'] = '29'
+        DISTRO['version'] = '30'
     elif 'apt-get' == pkg_mgr:
         DISTRO['family'] = 'debian'
         DISTRO['variant'] = 'ubuntu'

@@ -11,7 +11,7 @@ memcached \
 iptables haproxy ipset radvd openvswitch-switch conntrack \
 python3-guestfs \
 g++ \
-pcs pacemaker \
+pcs \
 rsync python-keystonemiddleware python3-pymysql \
 ceph-mds ceph-mgr ceph-mon ceph-osd radosgw redis python3-redis python3-memcache \
 python3-libvirt python3-keystoneauth1 python3-keystoneclient python3-rbd \

@@ -216,7 +216,7 @@ class Ceph(facility.StorageBackend):
             'global': {
                 'fsid': fsid,
                 'mon_initial_members': ','.join(m[0] for m in mons),
-                'mon_host': ','.join(m[1] for m in mons),
+                'mon_host': ','.join("v2:" + m[1] + ":3300/0" for m in mons),
                 'auth_cluster_required': 'cephx',
                 'auth_service_required': 'cephx',
                 'auth_client_required': 'cephx',
@@ -233,7 +233,7 @@ class Ceph(facility.StorageBackend):
     # remote on only on of the the ceph mon only once
     def initial_keyring(self):
         # admin key
-        localsh.run("ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --set-uid=0 --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow'")
+        localsh.run("ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring --gen-key -n client.admin --cap mon 'allow *' --cap osd 'allow *' --cap mds 'allow'")
         admin_keyring = localsh.ret("cat /etc/ceph/ceph.client.admin.keyring")
         # NOTE: rgw mds also have bootstrap key
         # bootsrap keys usually used by only the tools, probably they not need to persist on non mon nodes
@@ -252,8 +252,8 @@ class Ceph(facility.StorageBackend):
                        chown ceph /tmp/ceph.mon.keyring""".format(fsid=fsid))
         for name, ip in mons:
             localsh.run("""
-                monmaptool --add {hostname} {ip} /tmp/monmap""".format(hostname=name,
-                                                                       ip=ip))
+                monmaptool --add {hostname} v2:{ip}:3300/0 /tmp/monmap""".format(hostname=name,
+                                                                                 ip=ip))
             self.file_path(
                 '/var/lib/ceph/mon/{cluster_name}-{hostname}'.format(
                     cluster_name=cluster_name, hostname=name),
@@ -334,21 +334,13 @@ systemctl start ceph-mgr@$name
         # TODO reentrant / idempontetn ..
         cluster_name = 'ceph'
         # local not mounted, not formated osd on the root disk , just for demo !!!
-        # OSD ID number is integer, should be continius allocation
-        self.file_path('/srv/ceph', owner='ceph', group='ceph', mode=0o755)
-        self.file_path('/srv/ceph/osd_0', owner='ceph', group='ceph')
-        # NOTE: ceph-disk is deprecated
-        localsh.run(("ceph-disk prepare --cluster '{cluster_name}' "
-                     " --cluster-uuid '{fsid}'  /srv/ceph/osd_0 ").format(
-            cluster_name=cluster_name, fsid=fsid))
-        localsh.run("""retry=0; while ! ceph-disk activate /srv/ceph/osd_0; do
-                       ((retry++))
-                       if [[ retry -ge 5 ]]; then
-                          break
-                       fi
-                       sleep 0.1
-                       done
-                    """)
+        # OSD ID number is integer, should be a continius allocation
+        osd_num = 0
+        self.file_path('/var/lib/ceph/osd/ceph-{osd_num}'.format(osd_num=osd_num), owner='ceph', group='ceph', mode=0o755)
+        localsh.run("ceph osd create")   # this allocates a new osd number, first run it is 0
+        localsh.run("ceph-osd -i {osd_num} --mkfs --mkkey --no-mon-config  --setuser ceph --setgroup ceph".format(osd_num=osd_num))
+        localsh.run("ceph auth add osd.{osd_num} osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-{osd_num}/keyring".format(osd_num=osd_num))
+        localsh.run("systemctl enable ceph-osd@{osd_num} && systemctl start ceph-osd@{osd_num}".format(osd_num=osd_num))
 
     # it is a possible combination to use swift as a backup service
     # ceph auth get-or-create client.cinder-backup mon 'allow r' osd 'allow class-read object_prefix rbd_children, allow rwx pool=backups' | tee /etc/ceph/ceph.client.cinder-backup.keyring

@@ -298,8 +298,10 @@ def image_download(name, data, image_tag='default', renew=False):
         fetch.download_origin_or_mirror(url, download_path)
         if 'sha256' in data:
             suma = _file_sha256_sum(download_path)
-            print('checksum {}'.format(suma))
-            assert suma == data['sha256']
+            if suma != data['sha256']:
+                raise Exception("Unexpected checksum! "
+                                "Excepted: {record} get : {actual}".format(
+                                    record=data['sha256'], actual=suma))
     work_file = os.path.join(img_dir, build_id)
     if 'compression' in data:
         print('Decompressing ..')

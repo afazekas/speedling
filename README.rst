@@ -92,7 +92,7 @@ Basic flow if you are logged into a throw away test machine
 
 .. code:: bash
 
-    sudo useradd -s /bin/bash -d /opt/stack -m stack
+    sudo useradd -s /bin/bash -m stack
     echo "stack ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/stack
     sudo su - stack
     git clone https://github.com/afazekas/speedling
