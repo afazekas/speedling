@@ -162,4 +162,5 @@ if [ $DOPIP = TRUE ]; then
     (cd keystone; pip3 install -e .)
     (cd swift; pip3 install -e .)
     (cd tempest; pip3 install -e .)
+    (cd placement; pip3 install -e .)
 fi
