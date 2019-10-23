@@ -230,6 +230,7 @@ class SSHLogHandler(logging.Handler):
 
 def initiate(globals_to_use):
     global use_globals
+    os.environ.unsetenv('PYTHONPATH')
     use_globals = globals_to_use
     os.write(OUTPUTFD, b'systemcontrol\n')
     os.write(LOGFD, b'systemcontrol\n')

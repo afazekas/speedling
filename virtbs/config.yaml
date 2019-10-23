@@ -25,7 +25,7 @@ address_pool:
 image_flow:
     f30:
         driver: image_download
-        url_pattern: http://download.eng.brq.redhat.com/pub/fedora/linux/releases/30/Cloud/x86_64/images/Fedora-Cloud-Base-30-1.2.x86_64.raw.xz
+        url_pattern: https://download.fedoraproject.org/pub/fedora/linux/releases/30/Cloud/x86_64/images/Fedora-Cloud-Base-30-1.2.x86_64.raw.xz
         sha256: 'e34fb3fbbb9e3b4757952cf813da80f2dea4b0d1ca311e2017b62f0c74e376d9'
         compression: xz
         fmt: raw

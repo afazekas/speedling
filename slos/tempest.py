@@ -80,7 +80,7 @@ class Tempest(facility.OpenStack):
     def do_tempest_cfg(cname, image_ref, image_ref_alt, public_network_id, min_compute_nodes=1):
         self = facility.get_component(cname)
         tempest_git_dir = gitutils.component_git_dir(self)
-        self.file_path(tempest_git_dir, owner='stack', group='stack')
+        self.file_path(tempest_git_dir, owner='stack', group='stack', mode=0o775)
 
         cfg = self.gen_tempest_conf(image_ref, image_ref_alt, public_network_id, min_compute_nodes)
         self.file_ini('/'.join((tempest_git_dir, 'etc', 'tempest.conf')),
